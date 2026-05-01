@@ -76,6 +76,17 @@ export const ROLE_LABELS: Record<string, string> = {
   staf: 'Staf Sokongan',
 };
 
+// Default admin credentials. Override via .env.local with
+// VITE_ADMIN_ID and VITE_ADMIN_PASSWORD for production deployments.
+export const ADMIN_DEFAULTS = {
+  id: (import.meta.env.VITE_ADMIN_ID as string | undefined) ?? 'admin',
+  password: (import.meta.env.VITE_ADMIN_PASSWORD as string | undefined) ?? 'admin',
+  profileId: 'admin',
+  name: 'Pentadbir Sistem',
+  department: 'Pentadbiran',
+  email: 'admin@skbt.edu.my',
+};
+
 export const ACHIEVEMENTS: Achievement[] = [
   {
     id: 'first_booking',

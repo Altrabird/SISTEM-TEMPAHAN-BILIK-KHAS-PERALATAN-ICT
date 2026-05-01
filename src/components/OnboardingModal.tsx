@@ -1,28 +1,38 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
-import { Sparkles, ArrowRight, UserPlus, Users, Search, RefreshCw } from 'lucide-react';
+import {
+  Sparkles, ArrowRight, UserPlus, Users, Search, RefreshCw, Shield, Lock, AlertCircle, ArrowLeft
+} from 'lucide-react';
 import { Profile, UserRole } from '../types';
-import { ROLE_LABELS } from '../constants';
+import { ROLE_LABELS, ADMIN_DEFAULTS } from '../constants';
 import { isSupabaseEnabled } from '../lib/supabase';
-import { fetchProfilesFromCloud } from '../lib/storage';
+import { fetchProfilesFromCloud, fetchProfileById } from '../lib/storage';
 
 interface Props {
   onComplete: (p: Profile) => void;
 }
 
-type Mode = 'create' | 'select';
+type Mode = 'create' | 'select' | 'admin';
 
 export function OnboardingModal({ onComplete }: Props) {
   const [mode, setMode] = useState<Mode>('create');
 
+  // Create form
   const [name, setName] = useState('');
   const [role, setRole] = useState<UserRole>('guru');
   const [department, setDepartment] = useState('');
   const [email, setEmail] = useState('');
 
+  // Select existing
   const [existing, setExisting] = useState<Profile[] | null>(null);
   const [loadingList, setLoadingList] = useState(false);
   const [search, setSearch] = useState('');
+
+  // Admin login
+  const [adminId, setAdminId] = useState('');
+  const [adminPwd, setAdminPwd] = useState('');
+  const [adminError, setAdminError] = useState<string | null>(null);
+  const [adminSubmitting, setAdminSubmitting] = useState(false);
 
   useEffect(() => {
     if (mode !== 'select' || existing !== null) return;
@@ -34,9 +44,7 @@ export function OnboardingModal({ onComplete }: Props) {
     return () => { cancelled = true; };
   }, [mode, existing]);
 
-  const refreshList = () => {
-    setExisting(null);
-  };
+  const refreshList = () => setExisting(null);
 
   const submitCreate = (e: React.FormEvent) => {
     e.preventDefault();
@@ -57,7 +65,38 @@ export function OnboardingModal({ onComplete }: Props) {
     onComplete({ ...p, lastActiveAt: Date.now() });
   };
 
+  const submitAdmin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAdminError(null);
+    if (adminId.trim() !== ADMIN_DEFAULTS.id || adminPwd !== ADMIN_DEFAULTS.password) {
+      setAdminError('ID atau kata laluan pentadbir salah.');
+      return;
+    }
+    setAdminSubmitting(true);
+
+    const existingAdmin = await fetchProfileById(ADMIN_DEFAULTS.profileId);
+    setAdminSubmitting(false);
+
+    const now = Date.now();
+    if (existingAdmin) {
+      onComplete({ ...existingAdmin, role: 'admin', lastActiveAt: now });
+    } else {
+      onComplete({
+        id: ADMIN_DEFAULTS.profileId,
+        name: ADMIN_DEFAULTS.name,
+        email: ADMIN_DEFAULTS.email,
+        role: 'admin',
+        department: ADMIN_DEFAULTS.department,
+        joinedAt: now,
+        lastActiveAt: now,
+      });
+    }
+  };
+
+  // Admin profiles are excluded — they must use the password-protected
+  // "Log Masuk Pentadbir" tab instead.
   const filtered = (existing ?? []).filter((p) => {
+    if (p.role === 'admin') return false;
     if (!search.trim()) return true;
     const q = search.toLowerCase();
     return (
@@ -79,19 +118,36 @@ export function OnboardingModal({ onComplete }: Props) {
         <div className="absolute -bottom-16 -left-16 w-48 h-48 rounded-full bg-indigo-500/10 blur-2xl" />
 
         <div className="relative">
-          <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center text-white shadow-lg mb-4">
-            <Sparkles size={24} />
+          <div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-white shadow-lg mb-4 ${
+            mode === 'admin'
+              ? 'bg-gradient-to-br from-purple-600 to-indigo-700'
+              : 'bg-gradient-to-br from-blue-600 to-indigo-600'
+          }`}>
+            {mode === 'admin' ? <Shield size={24} /> : <Sparkles size={24} />}
           </div>
-          <p className="text-[10px] font-bold uppercase tracking-widest text-blue-600 mb-2">Selamat Datang ke</p>
-          <h2 className="text-xl font-bold tracking-tight text-slate-900 leading-snug">
-            Sistem Tempahan Bilik Khas & Peralatan ICT
-          </h2>
-          <p className="text-sm font-bold text-slate-700 mt-0.5">SK Bandar Tawau</p>
-          <p className="text-sm text-slate-500 mt-2 leading-relaxed">
-            Mari kita sediakan portfolio anda. Pilih profil sedia ada atau cipta yang baru.
-          </p>
 
-          {isSupabaseEnabled && (
+          {mode === 'admin' ? (
+            <>
+              <p className="text-[10px] font-bold uppercase tracking-widest text-purple-600 mb-2">Akses Pentadbir</p>
+              <h2 className="text-xl font-bold tracking-tight text-slate-900 leading-snug">Log Masuk Pentadbir</h2>
+              <p className="text-sm text-slate-500 mt-2 leading-relaxed">
+                Masukkan ID dan kata laluan pentadbir untuk akses tetapan & paparan pemantauan.
+              </p>
+            </>
+          ) : (
+            <>
+              <p className="text-[10px] font-bold uppercase tracking-widest text-blue-600 mb-2">Selamat Datang ke</p>
+              <h2 className="text-xl font-bold tracking-tight text-slate-900 leading-snug">
+                Sistem Tempahan Bilik Khas & Peralatan ICT
+              </h2>
+              <p className="text-sm font-bold text-slate-700 mt-0.5">SK Bandar Tawau</p>
+              <p className="text-sm text-slate-500 mt-2 leading-relaxed">
+                Mari kita sediakan portfolio anda. Pilih profil sedia ada atau cipta yang baru.
+              </p>
+            </>
+          )}
+
+          {mode !== 'admin' && isSupabaseEnabled && (
             <div className="mt-6 grid grid-cols-2 gap-1 p-1 bg-slate-100 rounded-lg">
               <button
                 onClick={() => setMode('create')}
@@ -112,13 +168,13 @@ export function OnboardingModal({ onComplete }: Props) {
             </div>
           )}
 
-          {!isSupabaseEnabled && (
+          {mode !== 'admin' && !isSupabaseEnabled && (
             <p className="mt-4 text-[11px] text-amber-600 bg-amber-50 border border-amber-100 rounded-lg p-2 font-medium">
               Supabase belum dikonfig — hanya cipta profil baru tersedia.
             </p>
           )}
 
-          {mode === 'create' ? (
+          {mode === 'create' && (
             <form onSubmit={submitCreate} className="mt-6 space-y-4">
               <Field label="Nama Penuh *">
                 <input
@@ -134,8 +190,8 @@ export function OnboardingModal({ onComplete }: Props) {
               <div className="grid grid-cols-2 gap-3">
                 <Field label="Peranan">
                   <select value={role} onChange={(e) => setRole(e.target.value as UserRole)} className="onb-input">
-                    {Object.entries(ROLE_LABELS).map(([k, v]) => (
-                      <option key={k} value={k}>{v}</option>
+                    {(['guru', 'pelajar', 'staf'] as UserRole[]).map((k) => (
+                      <option key={k} value={k}>{ROLE_LABELS[k]}</option>
                     ))}
                   </select>
                 </Field>
@@ -164,11 +220,10 @@ export function OnboardingModal({ onComplete }: Props) {
               >
                 Mula Guna Sistem <ArrowRight size={16} />
               </button>
-              <p className="text-[10px] text-slate-400 text-center">
-                Anda boleh edit profil dari menu Tetapan pada bila-bila masa.
-              </p>
             </form>
-          ) : (
+          )}
+
+          {mode === 'select' && (
             <div className="mt-6 space-y-3">
               <div className="flex gap-2 items-center">
                 <div className="flex-1 relative">
@@ -217,12 +272,21 @@ export function OnboardingModal({ onComplete }: Props) {
                       {p.avatarUrl ? (
                         <img src={p.avatarUrl} alt={p.name} referrerPolicy="no-referrer" className="w-10 h-10 rounded-full object-cover shrink-0" />
                       ) : (
-                        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 text-white flex items-center justify-center text-xs font-black shrink-0">
+                        <div className={`w-10 h-10 rounded-full text-white flex items-center justify-center text-xs font-black shrink-0 ${
+                          p.role === 'admin'
+                            ? 'bg-gradient-to-br from-purple-600 to-indigo-700'
+                            : 'bg-gradient-to-br from-blue-500 to-indigo-600'
+                        }`}>
                           {initials}
                         </div>
                       )}
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm font-bold text-slate-800 truncate">{p.name}</p>
+                        <p className="text-sm font-bold text-slate-800 truncate flex items-center gap-1.5">
+                          {p.name}
+                          {p.role === 'admin' && (
+                            <Shield size={12} className="text-purple-600 shrink-0" />
+                          )}
+                        </p>
                         <p className="text-[11px] text-slate-500 truncate">
                           {ROLE_LABELS[p.role] ?? p.role}
                           {p.department && ` • ${p.department}`}
@@ -234,7 +298,72 @@ export function OnboardingModal({ onComplete }: Props) {
                   );
                 })}
               </div>
+            </div>
+          )}
 
+          {mode === 'admin' && (
+            <form onSubmit={submitAdmin} className="mt-6 space-y-4">
+              {adminError && (
+                <div className="bg-rose-50 border border-rose-100 rounded-lg p-3 flex items-start gap-2">
+                  <AlertCircle size={14} className="text-rose-500 shrink-0 mt-0.5" />
+                  <p className="text-xs font-bold text-rose-700">{adminError}</p>
+                </div>
+              )}
+
+              <Field label="ID Pentadbir">
+                <input
+                  autoFocus
+                  required
+                  type="text"
+                  value={adminId}
+                  onChange={(e) => setAdminId(e.target.value)}
+                  placeholder="admin"
+                  className="onb-input"
+                />
+              </Field>
+
+              <Field label="Kata Laluan">
+                <input
+                  required
+                  type="password"
+                  value={adminPwd}
+                  onChange={(e) => setAdminPwd(e.target.value)}
+                  placeholder="••••••"
+                  className="onb-input"
+                />
+              </Field>
+
+              <button
+                type="submit"
+                disabled={adminSubmitting}
+                className="w-full bg-gradient-to-r from-purple-600 to-indigo-600 text-white py-3.5 rounded-lg text-sm font-bold uppercase tracking-widest hover:from-purple-700 hover:to-indigo-700 transition-all shadow-lg shadow-purple-500/25 active:scale-[0.98] flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-wait"
+              >
+                <Lock size={14} /> {adminSubmitting ? 'Mengesahkan...' : 'Log Masuk'}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setMode('create');
+                  setAdminId('');
+                  setAdminPwd('');
+                  setAdminError(null);
+                }}
+                className="w-full text-xs font-bold uppercase tracking-widest text-slate-500 hover:text-slate-700 transition-colors flex items-center justify-center gap-1.5"
+              >
+                <ArrowLeft size={12} /> Kembali ke pemilihan profil
+              </button>
+            </form>
+          )}
+
+          {mode !== 'admin' && (
+            <div className="mt-6 pt-5 border-t border-slate-100">
+              <button
+                onClick={() => setMode('admin')}
+                className="w-full flex items-center justify-center gap-2 text-[11px] font-bold uppercase tracking-widest text-slate-500 hover:text-purple-600 transition-colors py-2"
+              >
+                <Shield size={12} /> Log Masuk Pentadbir
+              </button>
             </div>
           )}
         </div>
