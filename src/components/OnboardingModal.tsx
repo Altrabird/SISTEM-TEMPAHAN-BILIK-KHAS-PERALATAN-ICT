@@ -82,8 +82,12 @@ export function OnboardingModal({ onComplete }: Props) {
           <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center text-white shadow-lg mb-4">
             <Sparkles size={24} />
           </div>
-          <h2 className="text-2xl font-bold tracking-tight text-slate-900">Selamat Datang ke SKBT 2026</h2>
-          <p className="text-sm text-slate-500 mt-1.5 leading-relaxed">
+          <p className="text-[10px] font-bold uppercase tracking-widest text-blue-600 mb-2">Selamat Datang ke</p>
+          <h2 className="text-xl font-bold tracking-tight text-slate-900 leading-snug">
+            Sistem Tempahan Bilik Khas & Peralatan ICT
+          </h2>
+          <p className="text-sm font-bold text-slate-700 mt-0.5">SK Bandar Tawau</p>
+          <p className="text-sm text-slate-500 mt-2 leading-relaxed">
             Mari kita sediakan portfolio anda. Pilih profil sedia ada atau cipta yang baru.
           </p>
 
