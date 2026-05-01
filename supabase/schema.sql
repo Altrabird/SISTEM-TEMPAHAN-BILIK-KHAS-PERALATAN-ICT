@@ -88,22 +88,35 @@ alter table public.equipment enable row level security;
 alter table public.assets    enable row level security;
 alter table public.bookings  enable row level security;
 
+-- Postgres doesn't support `create policy if not exists`, so drop-then-create.
+drop policy if exists "read all profiles"  on public.profiles;
+drop policy if exists "read all rooms"     on public.rooms;
+drop policy if exists "read all equipment" on public.equipment;
+drop policy if exists "read all assets"    on public.assets;
+drop policy if exists "read all bookings"  on public.bookings;
+drop policy if exists "insert profiles"    on public.profiles;
+drop policy if exists "update profiles"    on public.profiles;
+drop policy if exists "insert bookings"    on public.bookings;
+drop policy if exists "update bookings"    on public.bookings;
+drop policy if exists "insert assets"      on public.assets;
+drop policy if exists "update assets"      on public.assets;
+
 -- Open read for everyone (good for an internal school tool)
-create policy if not exists "read all profiles"  on public.profiles  for select using (true);
-create policy if not exists "read all rooms"     on public.rooms     for select using (true);
-create policy if not exists "read all equipment" on public.equipment for select using (true);
-create policy if not exists "read all assets"    on public.assets    for select using (true);
-create policy if not exists "read all bookings"  on public.bookings  for select using (true);
+create policy "read all profiles"  on public.profiles  for select using (true);
+create policy "read all rooms"     on public.rooms     for select using (true);
+create policy "read all equipment" on public.equipment for select using (true);
+create policy "read all assets"    on public.assets    for select using (true);
+create policy "read all bookings"  on public.bookings  for select using (true);
 
 -- Open write for everyone (anon key). Tighten with auth.uid() once you add Supabase Auth.
-create policy if not exists "insert profiles"  on public.profiles  for insert with check (true);
-create policy if not exists "update profiles"  on public.profiles  for update using (true);
+create policy "insert profiles"  on public.profiles  for insert with check (true);
+create policy "update profiles"  on public.profiles  for update using (true);
 
-create policy if not exists "insert bookings"  on public.bookings  for insert with check (true);
-create policy if not exists "update bookings"  on public.bookings  for update using (true);
+create policy "insert bookings"  on public.bookings  for insert with check (true);
+create policy "update bookings"  on public.bookings  for update using (true);
 
-create policy if not exists "insert assets"    on public.assets    for insert with check (true);
-create policy if not exists "update assets"    on public.assets    for update using (true);
+create policy "insert assets"    on public.assets    for insert with check (true);
+create policy "update assets"    on public.assets    for update using (true);
 
 -- =========================================================================
 -- 7. SEED DATA (optional — matches src/constants.ts)
