@@ -1,0 +1,131 @@
+-- SKBT Booking System 2026 — Supabase schema
+-- Run in the Supabase SQL Editor (Project → SQL → New query) and click RUN.
+
+-- =========================================================================
+-- 1. PROFILES
+-- =========================================================================
+create table if not exists public.profiles (
+  id text primary key,
+  name text not null,
+  email text,
+  role text not null default 'guru',
+  department text,
+  avatar_url text,
+  bio text,
+  joined_at timestamptz not null default now(),
+  last_active_at timestamptz not null default now()
+);
+
+create index if not exists profiles_role_idx on public.profiles (role);
+
+-- =========================================================================
+-- 2. ROOMS
+-- =========================================================================
+create table if not exists public.rooms (
+  id text primary key,
+  name text not null,
+  description text,
+  capacity integer
+);
+
+-- =========================================================================
+-- 3. EQUIPMENT
+-- =========================================================================
+create table if not exists public.equipment (
+  id text primary key,
+  name text not null,
+  description text,
+  quantity integer
+);
+
+-- =========================================================================
+-- 4. ASSETS (specific units of equipment)
+-- =========================================================================
+create table if not exists public.assets (
+  id text primary key,
+  resource_id text not null references public.equipment(id) on delete cascade,
+  name text not null,
+  serial_number text not null,
+  specifications text,
+  image_url text,
+  status text not null default 'available'
+    check (status in ('available', 'borrowed', 'maintenance'))
+);
+
+create index if not exists assets_resource_id_idx on public.assets (resource_id);
+create index if not exists assets_status_idx on public.assets (status);
+
+-- =========================================================================
+-- 5. BOOKINGS
+-- =========================================================================
+create table if not exists public.bookings (
+  id text primary key,
+  resource_id text not null,
+  resource_type text not null check (resource_type in ('room', 'equipment')),
+  user_id text not null,
+  user_name text not null,
+  date date not null,
+  start_time time not null,
+  end_time time not null,
+  purpose text,
+  status text not null default 'confirmed'
+    check (status in ('pending', 'confirmed', 'cancelled')),
+  created_at timestamptz not null default now()
+);
+
+create index if not exists bookings_user_id_idx on public.bookings (user_id);
+create index if not exists bookings_date_idx on public.bookings (date);
+create index if not exists bookings_resource_idx on public.bookings (resource_id, date);
+
+-- =========================================================================
+-- 6. ROW LEVEL SECURITY (development-friendly defaults)
+-- For production, replace the open policies with auth-aware policies that
+-- restrict updates/deletes to the row's owner via auth.uid().
+-- =========================================================================
+alter table public.profiles  enable row level security;
+alter table public.rooms     enable row level security;
+alter table public.equipment enable row level security;
+alter table public.assets    enable row level security;
+alter table public.bookings  enable row level security;
+
+-- Open read for everyone (good for an internal school tool)
+create policy if not exists "read all profiles"  on public.profiles  for select using (true);
+create policy if not exists "read all rooms"     on public.rooms     for select using (true);
+create policy if not exists "read all equipment" on public.equipment for select using (true);
+create policy if not exists "read all assets"    on public.assets    for select using (true);
+create policy if not exists "read all bookings"  on public.bookings  for select using (true);
+
+-- Open write for everyone (anon key). Tighten with auth.uid() once you add Supabase Auth.
+create policy if not exists "insert profiles"  on public.profiles  for insert with check (true);
+create policy if not exists "update profiles"  on public.profiles  for update using (true);
+
+create policy if not exists "insert bookings"  on public.bookings  for insert with check (true);
+create policy if not exists "update bookings"  on public.bookings  for update using (true);
+
+create policy if not exists "insert assets"    on public.assets    for insert with check (true);
+create policy if not exists "update assets"    on public.assets    for update using (true);
+
+-- =========================================================================
+-- 7. SEED DATA (optional — matches src/constants.ts)
+-- =========================================================================
+insert into public.rooms (id, name, capacity) values
+  ('room-1',  'Makmal Komputer 1 (bawah)', 40),
+  ('room-2',  'Makmal Komputer 2 (atas)',  40),
+  ('room-3',  'Bilik Akses',               20),
+  ('room-4',  'Bilik Panitia Bahasa',      15),
+  ('room-5',  'Bilik Panitia Matematik',   15),
+  ('room-6',  'Bengkel RBT 1',             30),
+  ('room-7',  'Bengkel RBT 2',             30),
+  ('room-8',  'Bilik Panitia Muzik',       25),
+  ('room-9',  'Bilik Sains',               40),
+  ('room-10', 'Bilik Gerakan SKBT',        50)
+on conflict (id) do nothing;
+
+insert into public.equipment (id, name, quantity) values
+  ('eq-1', 'PC',                  20),
+  ('eq-2', 'Laptop Murid',        21),
+  ('eq-3', 'Laptop Guru Fasa 1',   7),
+  ('eq-4', 'Laptop Guru Fasa 2',   6),
+  ('eq-5', 'LCD',                 10),
+  ('eq-6', 'Pencetak',             5)
+on conflict (id) do nothing;
