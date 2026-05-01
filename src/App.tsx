@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import {
   LayoutDashboard, CalendarDays, DoorOpen, Laptop, Settings,
-  Plus, Menu, X, UserCircle2, Sparkles
+  Plus, Menu, X, UserCircle2, Sparkles, Shield
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { INITIAL_ROOMS, INITIAL_EQUIPMENT, INITIAL_ASSETS, ROLE_LABELS } from './constants';
@@ -14,13 +14,14 @@ import { BookingsView } from './views/BookingsView';
 import { ResourceManagementView } from './views/ResourceManagementView';
 import { SettingsView } from './views/SettingsView';
 import { PortfolioView } from './views/PortfolioView';
+import { AdminView } from './views/AdminView';
 
 import { OnboardingModal } from './components/OnboardingModal';
 import { BookingModal } from './components/BookingModal';
 import { AssetListModal } from './components/AssetListModal';
 import { AddAssetModal } from './components/AddAssetModal';
 
-type View = 'dashboard' | 'portfolio' | 'bookings' | 'rooms' | 'equipment' | 'settings';
+type View = 'dashboard' | 'portfolio' | 'bookings' | 'rooms' | 'equipment' | 'admin' | 'settings';
 
 export default function App() {
   const [activeView, setActiveView] = useState<View>('dashboard');
@@ -100,12 +101,15 @@ export default function App() {
     setShowBookingModal(true);
   };
 
+  const isAdmin = profile?.role === 'admin';
+
   const navItems = [
     { id: 'dashboard' as View, label: 'Utama', icon: LayoutDashboard },
     { id: 'portfolio' as View, label: 'Portfolio Saya', icon: UserCircle2 },
     { id: 'bookings' as View, label: 'Tempahan', icon: CalendarDays },
     { id: 'rooms' as View, label: 'Bilik Khas', icon: DoorOpen },
     { id: 'equipment' as View, label: 'Peralatan ICT', icon: Laptop },
+    ...(isAdmin ? [{ id: 'admin' as View, label: 'Pentadbir', icon: Shield }] : []),
     { id: 'settings' as View, label: 'Tetapan', icon: Settings },
   ];
 
@@ -298,6 +302,24 @@ export default function App() {
                     setShowAddAssetModal(true);
                   }}
                 />
+              )}
+              {activeView === 'admin' && isAdmin && (
+                <AdminView
+                  rooms={rooms}
+                  equipment={equipment}
+                  localBookings={bookings}
+                />
+              )}
+              {activeView === 'admin' && !isAdmin && (
+                <div className="max-w-lg mx-auto bg-white rounded-3xl border border-rose-200 p-12 text-center shadow-sm">
+                  <div className="w-16 h-16 mx-auto rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center mb-4">
+                    <Shield size={32} />
+                  </div>
+                  <h2 className="text-xl font-bold text-slate-800">Akses Terhad</h2>
+                  <p className="text-sm text-slate-500 mt-2">
+                    Hanya pengguna dengan peranan "Pentadbir" boleh mengakses paparan ini.
+                  </p>
+                </div>
               )}
               {activeView === 'settings' && (
                 <SettingsView

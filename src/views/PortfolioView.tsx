@@ -46,11 +46,12 @@ interface Props {
   bookings: Booking[];
   rooms: Resource[];
   equipment: Resource[];
-  onEditProfile: () => void;
-  onNewBooking: () => void;
+  onEditProfile?: () => void;
+  onNewBooking?: () => void;
+  readOnly?: boolean;
 }
 
-export function PortfolioView({ profile, bookings, rooms, equipment, onEditProfile, onNewBooking }: Props) {
+export function PortfolioView({ profile, bookings, rooms, equipment, onEditProfile, onNewBooking, readOnly = false }: Props) {
   const stats = useMemo(
     () => computePortfolioStats(bookings, rooms, equipment, profile.id, profile.joinedAt),
     [bookings, rooms, equipment, profile.id, profile.joinedAt],
@@ -141,20 +142,26 @@ export function PortfolioView({ profile, bookings, rooms, equipment, onEditProfi
             </div>
           </div>
 
-          <div className="flex flex-col sm:flex-row lg:flex-col gap-2 w-full lg:w-auto">
-            <button
-              onClick={onNewBooking}
-              className="bg-white text-slate-900 px-5 py-2.5 rounded-lg text-xs font-bold uppercase tracking-widest hover:bg-blue-50 transition-all shadow-lg flex items-center gap-2 justify-center"
-            >
-              <Sparkles size={14} /> Tempahan Baru
-            </button>
-            <button
-              onClick={onEditProfile}
-              className="bg-white/10 hover:bg-white/20 backdrop-blur border border-white/20 px-5 py-2.5 rounded-lg text-xs font-bold uppercase tracking-widest transition-all flex items-center gap-2 justify-center"
-            >
-              Edit Profil
-            </button>
-          </div>
+          {!readOnly && (
+            <div className="flex flex-col sm:flex-row lg:flex-col gap-2 w-full lg:w-auto">
+              {onNewBooking && (
+                <button
+                  onClick={onNewBooking}
+                  className="bg-white text-slate-900 px-5 py-2.5 rounded-lg text-xs font-bold uppercase tracking-widest hover:bg-blue-50 transition-all shadow-lg flex items-center gap-2 justify-center"
+                >
+                  <Sparkles size={14} /> Tempahan Baru
+                </button>
+              )}
+              {onEditProfile && (
+                <button
+                  onClick={onEditProfile}
+                  className="bg-white/10 hover:bg-white/20 backdrop-blur border border-white/20 px-5 py-2.5 rounded-lg text-xs font-bold uppercase tracking-widest transition-all flex items-center gap-2 justify-center"
+                >
+                  Edit Profil
+                </button>
+              )}
+            </div>
+          )}
         </div>
       </motion.div>
 
