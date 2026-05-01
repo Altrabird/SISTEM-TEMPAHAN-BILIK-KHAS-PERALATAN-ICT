@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
-import { Sparkles, ArrowRight, UserPlus, Users, Search, RefreshCw, Cloud } from 'lucide-react';
+import { Sparkles, ArrowRight, UserPlus, Users, Search, RefreshCw } from 'lucide-react';
 import { Profile, UserRole } from '../types';
 import { ROLE_LABELS } from '../constants';
 import { isSupabaseEnabled } from '../lib/supabase';
@@ -235,10 +235,6 @@ export function OnboardingModal({ onComplete }: Props) {
                 })}
               </div>
 
-              <p className="text-[10px] text-slate-400 text-center flex items-center justify-center gap-1">
-                <Cloud size={10} className="text-emerald-500" />
-                Senarai disegerakkan dari Supabase ({existing?.length ?? 0} profil).
-              </p>
             </div>
           )}
         </div>
