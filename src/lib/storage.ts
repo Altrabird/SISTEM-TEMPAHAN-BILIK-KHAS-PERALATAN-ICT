@@ -81,6 +81,26 @@ export async function syncBookingToCloud(booking: Booking): Promise<{ ok: boolea
   return { ok: true };
 }
 
+export async function fetchProfilesFromCloud(): Promise<Profile[] | null> {
+  if (!isSupabaseEnabled || !supabase) return null;
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('*')
+    .order('last_active_at', { ascending: false });
+  if (error || !data) return null;
+  return data.map((row: any) => ({
+    id: row.id,
+    name: row.name,
+    email: row.email ?? undefined,
+    role: row.role,
+    department: row.department ?? undefined,
+    avatarUrl: row.avatar_url ?? undefined,
+    bio: row.bio ?? undefined,
+    joinedAt: new Date(row.joined_at).getTime(),
+    lastActiveAt: new Date(row.last_active_at).getTime(),
+  }));
+}
+
 export async function fetchBookingsFromCloud(): Promise<Booking[] | null> {
   if (!isSupabaseEnabled || !supabase) return null;
   const { data, error } = await supabase.from('bookings').select('*').order('created_at', { ascending: false });
