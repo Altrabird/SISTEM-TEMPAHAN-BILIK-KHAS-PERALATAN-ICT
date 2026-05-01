@@ -20,6 +20,7 @@ import { OnboardingModal } from './components/OnboardingModal';
 import { BookingModal } from './components/BookingModal';
 import { AssetListModal } from './components/AssetListModal';
 import { AddAssetModal } from './components/AddAssetModal';
+import { EditProfileModal } from './components/EditProfileModal';
 
 type View = 'dashboard' | 'portfolio' | 'bookings' | 'rooms' | 'equipment' | 'admin' | 'settings';
 
@@ -39,6 +40,7 @@ export default function App() {
   const [showAssetList, setShowAssetList] = useState(false);
   const [showAddAssetModal, setShowAddAssetModal] = useState(false);
   const [showBookingModal, setShowBookingModal] = useState(false);
+  const [showEditProfileModal, setShowEditProfileModal] = useState(false);
   const [bookingInitial, setBookingInitial] = useState<Partial<Booking>>({});
 
   useEffect(() => {
@@ -116,8 +118,12 @@ export default function App() {
     { id: 'bookings' as View, label: 'Tempahan', icon: CalendarDays },
     { id: 'rooms' as View, label: 'Bilik Khas', icon: DoorOpen },
     { id: 'equipment' as View, label: 'Peralatan ICT', icon: Laptop },
-    ...(isAdmin ? [{ id: 'admin' as View, label: 'Pentadbir', icon: Shield }] : []),
-    { id: 'settings' as View, label: 'Tetapan', icon: Settings },
+    ...(isAdmin
+      ? [
+          { id: 'admin' as View, label: 'Pentadbir', icon: Shield },
+          { id: 'settings' as View, label: 'Tetapan', icon: Settings },
+        ]
+      : []),
   ];
 
   const initials = useMemo(
@@ -292,7 +298,7 @@ export default function App() {
                   bookings={bookings}
                   rooms={rooms}
                   equipment={equipment}
-                  onEditProfile={() => setActiveView('settings')}
+                  onEditProfile={() => setShowEditProfileModal(true)}
                   onNewBooking={() => openBookingModal()}
                 />
               )}
@@ -349,7 +355,7 @@ export default function App() {
                   </p>
                 </div>
               )}
-              {activeView === 'settings' && (
+              {activeView === 'settings' && isAdmin && (
                 <SettingsView
                   profile={profile}
                   onReset={() => {
@@ -361,6 +367,24 @@ export default function App() {
                   onSaveProfile={(p) => setProfile(p)}
                   onSwitchProfile={switchProfile}
                 />
+              )}
+              {activeView === 'settings' && !isAdmin && (
+                <div className="max-w-lg mx-auto bg-white rounded-3xl border border-rose-200 p-12 text-center shadow-sm">
+                  <div className="w-16 h-16 mx-auto rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center mb-4">
+                    <Settings size={32} />
+                  </div>
+                  <h2 className="text-xl font-bold text-slate-800">Akses Terhad</h2>
+                  <p className="text-sm text-slate-500 mt-2">
+                    Tetapan sistem hanya boleh diakses oleh Pentadbir.
+                    Untuk edit profil anda, sila pergi ke <strong className="text-blue-600">Portfolio Saya</strong>.
+                  </p>
+                  <button
+                    onClick={() => setActiveView('portfolio')}
+                    className="mt-6 bg-blue-600 text-white px-6 py-2.5 rounded-lg text-xs font-bold uppercase tracking-widest hover:bg-blue-700 transition-all"
+                  >
+                    Pergi ke Portfolio Saya
+                  </button>
+                </div>
               )}
             </motion.div>
           </AnimatePresence>
@@ -397,6 +421,16 @@ export default function App() {
         onClose={() => setShowAddAssetModal(false)}
         onSubmit={(asset) => setAssets((prev) => [...prev, asset])}
       />
+
+      {profile && (
+        <EditProfileModal
+          open={showEditProfileModal}
+          profile={profile}
+          isAdmin={isAdmin}
+          onClose={() => setShowEditProfileModal(false)}
+          onSave={(p) => setProfile(p)}
+        />
+      )}
     </div>
   );
 }
