@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Save, RefreshCw, Database, User, Cloud, CloudOff } from 'lucide-react';
+import { Save, RefreshCw, Database, User, Cloud, CloudOff, LogOut } from 'lucide-react';
 import { Profile } from '../types';
 import { ROLE_LABELS } from '../constants';
 import { isSupabaseEnabled } from '../lib/supabase';
@@ -8,9 +8,10 @@ interface Props {
   profile: Profile | null;
   onReset: () => void;
   onSaveProfile: (p: Profile) => void;
+  onSwitchProfile: () => void;
 }
 
-export function SettingsView({ profile, onReset, onSaveProfile }: Props) {
+export function SettingsView({ profile, onReset, onSaveProfile, onSwitchProfile }: Props) {
   const [draft, setDraft] = useState<Profile | null>(profile);
   const [savedFlash, setSavedFlash] = useState(false);
 
@@ -112,6 +113,31 @@ export function SettingsView({ profile, onReset, onSaveProfile }: Props) {
           >
             <Save size={14} /> Simpan Profil
           </button>
+        </div>
+      )}
+
+      {profile && (
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-8 space-y-4">
+          <h3 className="text-[10px] font-bold uppercase tracking-widest text-slate-400 flex items-center gap-2">
+            <LogOut size={12} /> Profil Aktif
+          </h3>
+          <div className="p-5 bg-slate-50 border border-slate-100 rounded-xl flex items-start justify-between gap-4 flex-wrap">
+            <div className="space-y-1 min-w-0">
+              <p className="text-sm font-bold text-slate-800 truncate">
+                Anda log masuk sebagai <span className="text-blue-600">{profile.name}</span>
+              </p>
+              <p className="text-xs text-slate-500 leading-relaxed">
+                Tersilap profil? Tekan butang ini untuk kembali ke menu pemilihan profil
+                (Cipta Baru atau Profil Sedia Ada).
+              </p>
+            </div>
+            <button
+              onClick={onSwitchProfile}
+              className="bg-slate-900 text-white px-5 py-2 rounded-lg text-xs font-bold uppercase tracking-widest hover:bg-slate-700 transition-all shadow-md active:scale-95 flex items-center gap-2 shrink-0"
+            >
+              <LogOut size={14} /> Tukar Profil
+            </button>
+          </div>
         </div>
       )}
 

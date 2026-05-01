@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import {
   LayoutDashboard, CalendarDays, DoorOpen, Laptop, Settings,
-  Plus, Menu, X, UserCircle2, Sparkles, Shield
+  Plus, Menu, X, UserCircle2, Sparkles, Shield, LogOut
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { INITIAL_ROOMS, INITIAL_EQUIPMENT, INITIAL_ASSETS, ROLE_LABELS } from './constants';
@@ -64,6 +64,13 @@ export default function App() {
 
   const updateLastActive = () => {
     if (profile) setProfile({ ...profile, lastActiveAt: Date.now() });
+  };
+
+  const switchProfile = () => {
+    if (!confirm('Tukar profil? Anda akan kembali ke menu pemilihan profil.')) return;
+    localStore.clearProfile();
+    setProfile(null);
+    setActiveView('dashboard');
   };
 
   const checkConflict = (resourceId: string, date: string, start: string, end: string) =>
@@ -185,27 +192,48 @@ export default function App() {
         </nav>
 
         <div className="p-4 bg-slate-900/50 border-t border-slate-800">
-          <button
-            onClick={() => setActiveView('portfolio')}
-            className="w-full flex items-center gap-3 mb-3 px-2 py-1.5 rounded-lg hover:bg-slate-800 transition-colors text-left"
-          >
-            {profile?.avatarUrl ? (
-              <img src={profile.avatarUrl} alt={profile.name} referrerPolicy="no-referrer" className="w-8 h-8 rounded-full object-cover" />
-            ) : (
-              <div className="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center text-xs font-bold text-slate-300 shrink-0">
-                {initials}
-              </div>
+          <div className="flex items-center gap-2 mb-2">
+            <button
+              onClick={() => setActiveView('portfolio')}
+              className="flex-1 flex items-center gap-3 px-2 py-1.5 rounded-lg hover:bg-slate-800 transition-colors text-left min-w-0"
+              title="Lihat portfolio saya"
+            >
+              {profile?.avatarUrl ? (
+                <img src={profile.avatarUrl} alt={profile.name} referrerPolicy="no-referrer" className="w-8 h-8 rounded-full object-cover shrink-0" />
+              ) : (
+                <div className="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center text-xs font-bold text-slate-300 shrink-0">
+                  {initials}
+                </div>
+              )}
+              {isSidebarOpen && (
+                <div className="overflow-hidden flex-1">
+                  <p className="text-xs font-bold text-white truncate">{profile?.name ?? 'Tetamu'}</p>
+                  <p className="text-[10px] text-slate-500 truncate">
+                    {profile ? (ROLE_LABELS[profile.role] ?? profile.role) : 'Belum ditetapkan'}
+                    {isSupabaseEnabled && <span className="ml-1.5 text-emerald-400">●</span>}
+                  </p>
+                </div>
+              )}
+            </button>
+            {profile && isSidebarOpen && (
+              <button
+                onClick={switchProfile}
+                className="p-2 rounded-lg text-slate-500 hover:bg-slate-800 hover:text-rose-300 transition-colors shrink-0"
+                title="Tukar profil"
+              >
+                <LogOut size={14} />
+              </button>
             )}
-            {isSidebarOpen && (
-              <div className="overflow-hidden flex-1">
-                <p className="text-xs font-bold text-white truncate">{profile?.name ?? 'Tetamu'}</p>
-                <p className="text-[10px] text-slate-500 truncate">
-                  {profile ? (ROLE_LABELS[profile.role] ?? profile.role) : 'Belum ditetapkan'}
-                  {isSupabaseEnabled && <span className="ml-1.5 text-emerald-400">●</span>}
-                </p>
-              </div>
-            )}
-          </button>
+          </div>
+          {profile && !isSidebarOpen && (
+            <button
+              onClick={switchProfile}
+              className="w-full h-8 flex items-center justify-center hover:bg-slate-800 rounded-lg transition-colors text-slate-500 hover:text-rose-300 mb-1"
+              title="Tukar profil"
+            >
+              <LogOut size={14} />
+            </button>
+          )}
           <button
             onClick={() => setIsSidebarOpen(!isSidebarOpen)}
             className="w-full h-8 flex items-center justify-center hover:bg-slate-800 rounded-lg transition-colors text-slate-500 hover:text-slate-300"
@@ -331,6 +359,7 @@ export default function App() {
                     }
                   }}
                   onSaveProfile={(p) => setProfile(p)}
+                  onSwitchProfile={switchProfile}
                 />
               )}
             </motion.div>
