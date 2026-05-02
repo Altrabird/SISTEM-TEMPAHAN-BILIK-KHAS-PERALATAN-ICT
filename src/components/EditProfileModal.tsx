@@ -1,8 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, Save, UserCog } from 'lucide-react';
+import { X, Save, UserCog, Image as ImageIcon, Camera, Trash2, Loader2, AlertCircle } from 'lucide-react';
 import { Profile } from '../types';
 import { ROLE_LABELS } from '../constants';
+import { uploadAvatar } from '../lib/storage';
+import { isSupabaseEnabled } from '../lib/supabase';
 
 interface Props {
   open: boolean;
@@ -15,13 +17,39 @@ interface Props {
 export function EditProfileModal({ open, profile, isAdmin, onClose, onSave }: Props) {
   const [draft, setDraft] = useState<Profile>(profile);
   const [savedFlash, setSavedFlash] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+
+  const galleryRef = useRef<HTMLInputElement>(null);
+  const cameraRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (open) {
       setDraft(profile);
       setSavedFlash(false);
+      setUploadError(null);
     }
   }, [open, profile]);
+
+  const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = ''; // allow re-selecting the same file
+    if (!file) return;
+    setUploadError(null);
+    setUploading(true);
+    const { url, error } = await uploadAvatar(file, draft.id);
+    setUploading(false);
+    if (error || !url) {
+      setUploadError(error ?? 'Muat naik gagal.');
+      return;
+    }
+    setDraft({ ...draft, avatarUrl: url });
+  };
+
+  const removeAvatar = () => {
+    setDraft({ ...draft, avatarUrl: undefined });
+    setUploadError(null);
+  };
 
   const handle = (e: React.FormEvent) => {
     e.preventDefault();
@@ -33,6 +61,13 @@ export function EditProfileModal({ open, profile, isAdmin, onClose, onSave }: Pr
       onClose();
     }, 700);
   };
+
+  const initials = draft.name
+    .split(' ')
+    .map((n) => n[0])
+    .join('')
+    .slice(0, 2)
+    .toUpperCase();
 
   return (
     <AnimatePresence>
@@ -117,13 +152,88 @@ export function EditProfileModal({ open, profile, isAdmin, onClose, onSave }: Pr
                   />
                 </Field>
               </div>
-              <Field label="URL Avatar (pilihan)">
+              <Field label="Gambar Profil (pilihan)">
                 <input
-                  value={draft.avatarUrl ?? ''}
-                  onChange={(e) => setDraft({ ...draft, avatarUrl: e.target.value })}
-                  className="ep-input"
-                  placeholder="https://..."
+                  ref={galleryRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={handleFile}
                 />
+                <input
+                  ref={cameraRef}
+                  type="file"
+                  accept="image/*"
+                  capture="user"
+                  className="hidden"
+                  onChange={handleFile}
+                />
+                <div className="flex items-start gap-4 p-3 bg-slate-50 rounded-lg border border-slate-200">
+                  <div className="relative shrink-0">
+                    {draft.avatarUrl ? (
+                      <img
+                        src={draft.avatarUrl}
+                        alt={draft.name}
+                        referrerPolicy="no-referrer"
+                        className="w-16 h-16 rounded-full object-cover border-2 border-white shadow"
+                      />
+                    ) : (
+                      <div className="w-16 h-16 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 text-white flex items-center justify-center text-lg font-black border-2 border-white shadow">
+                        {initials || '?'}
+                      </div>
+                    )}
+                    {uploading && (
+                      <div className="absolute inset-0 bg-slate-900/60 rounded-full flex items-center justify-center">
+                        <Loader2 size={20} className="text-white animate-spin" />
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0 space-y-2">
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        disabled={uploading || !isSupabaseEnabled}
+                        onClick={() => galleryRef.current?.click()}
+                        className="flex items-center justify-center gap-1.5 px-3 py-2 bg-white border border-slate-200 rounded-lg text-[11px] font-bold uppercase tracking-widest text-slate-700 hover:border-blue-500 hover:text-blue-600 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                      >
+                        <ImageIcon size={13} /> Galeri
+                      </button>
+                      <button
+                        type="button"
+                        disabled={uploading || !isSupabaseEnabled}
+                        onClick={() => cameraRef.current?.click()}
+                        className="flex items-center justify-center gap-1.5 px-3 py-2 bg-white border border-slate-200 rounded-lg text-[11px] font-bold uppercase tracking-widest text-slate-700 hover:border-blue-500 hover:text-blue-600 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                      >
+                        <Camera size={13} /> Kamera
+                      </button>
+                    </div>
+                    {draft.avatarUrl && !uploading && (
+                      <button
+                        type="button"
+                        onClick={removeAvatar}
+                        className="w-full flex items-center justify-center gap-1.5 px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+                      >
+                        <Trash2 size={11} /> Buang Gambar
+                      </button>
+                    )}
+                    {!isSupabaseEnabled && (
+                      <p className="text-[10px] text-amber-600 leading-snug">
+                        Supabase tidak dikonfig — muat naik tidak tersedia.
+                      </p>
+                    )}
+                    {!draft.avatarUrl && !uploadError && isSupabaseEnabled && (
+                      <p className="text-[10px] text-slate-500 leading-snug">
+                        Saiz auto-kecilkan kepada 512px. JPG/PNG.
+                      </p>
+                    )}
+                  </div>
+                </div>
+                {uploadError && (
+                  <div className="mt-2 bg-rose-50 border border-rose-100 rounded-lg p-2 flex items-start gap-2">
+                    <AlertCircle size={12} className="text-rose-500 shrink-0 mt-0.5" />
+                    <p className="text-[10px] font-bold text-rose-700 leading-snug">{uploadError}</p>
+                  </div>
+                )}
               </Field>
               <Field label="Bio Ringkas">
                 <textarea

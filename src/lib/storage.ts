@@ -41,6 +41,65 @@ export const localStore = {
   },
 };
 
+/**
+ * Resize an image client-side to a square that fits within `maxSize`,
+ * encoded as JPEG. Avatars don't need original-resolution detail and
+ * smartphone photos are 5-10 MB raw, so we trim before upload.
+ */
+async function resizeImage(file: File | Blob, maxSize = 512, quality = 0.85): Promise<Blob> {
+  const bitmap = await createImageBitmap(file);
+  const scale = Math.min(maxSize / bitmap.width, maxSize / bitmap.height, 1);
+  const w = Math.max(1, Math.round(bitmap.width * scale));
+  const h = Math.max(1, Math.round(bitmap.height * scale));
+  const canvas = document.createElement('canvas');
+  canvas.width = w;
+  canvas.height = h;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('Canvas not supported');
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, w, h);
+  ctx.drawImage(bitmap, 0, 0, w, h);
+  bitmap.close?.();
+  return new Promise((resolve, reject) => {
+    canvas.toBlob(
+      (blob) => (blob ? resolve(blob) : reject(new Error('Image encoding failed'))),
+      'image/jpeg',
+      quality,
+    );
+  });
+}
+
+export async function uploadAvatar(
+  file: File,
+  userId: string,
+): Promise<{ url: string | null; error?: string }> {
+  if (!isSupabaseEnabled || !supabase) {
+    return { url: null, error: 'Supabase belum dikonfig.' };
+  }
+  if (!file.type.startsWith('image/')) {
+    return { url: null, error: 'Sila pilih fail gambar sahaja.' };
+  }
+  try {
+    const blob = await resizeImage(file, 512, 0.85);
+    const safeId = userId.replace(/[^a-z0-9_-]/gi, '');
+    const filename = `avatar-${safeId}-${Date.now()}.jpg`;
+    const { error: uploadError } = await supabase.storage
+      .from('images')
+      .upload(filename, blob, {
+        contentType: 'image/jpeg',
+        cacheControl: '3600',
+        upsert: true,
+      });
+    if (uploadError) {
+      return { url: null, error: uploadError.message };
+    }
+    const { data } = supabase.storage.from('images').getPublicUrl(filename);
+    return { url: data.publicUrl };
+  } catch (err: any) {
+    return { url: null, error: err?.message ?? 'Ralat tidak diketahui semasa muat naik.' };
+  }
+}
+
 export async function syncProfileToCloud(profile: Profile): Promise<{ ok: boolean; error?: string }> {
   if (!isSupabaseEnabled || !supabase) {
     return { ok: false, error: 'Supabase not configured' };
