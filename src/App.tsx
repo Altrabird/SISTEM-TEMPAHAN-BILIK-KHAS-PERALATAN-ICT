@@ -30,6 +30,9 @@ import { AssetListModal } from './components/AssetListModal';
 import { AddAssetModal } from './components/AddAssetModal';
 import { EditProfileModal } from './components/EditProfileModal';
 import { EditResourceModal } from './components/EditResourceModal';
+import { LoanModal } from './components/LoanModal';
+import { BulkLoanModal } from './components/BulkLoanModal';
+import { QRCodeModal } from './components/QRCodeModal';
 
 type View = 'dashboard' | 'portfolio' | 'bookings' | 'rooms' | 'equipment' | 'admin' | 'reports' | 'settings';
 
@@ -53,6 +56,12 @@ export default function App() {
   const [editingResource, setEditingResource] = useState<Resource | null>(null);
   const [bookingInitial, setBookingInitial] = useState<Partial<Booking>>({});
 
+  const [loanAsset, setLoanAsset] = useState<Asset | null>(null);
+  const [loanFromQr, setLoanFromQr] = useState(false);
+  const [showBulkLoanModal, setShowBulkLoanModal] = useState(false);
+  const [qrAsset, setQrAsset] = useState<Asset | null>(null);
+  const [pendingLoanId, setPendingLoanId] = useState<string | null>(null);
+
   useEffect(() => {
     setRooms(localStore.getRooms(INITIAL_ROOMS));
     setEquipment(localStore.getEquipment(INITIAL_EQUIPMENT));
@@ -71,7 +80,36 @@ export default function App() {
       if (cloudRooms && cloudRooms.length > 0) setRooms(cloudRooms);
       if (cloudEquipment && cloudEquipment.length > 0) setEquipment(cloudEquipment);
     })();
+
+    // Parse ?loan=ast-X URL param (QR code deep-link entry).
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const loanId = params.get('loan');
+      if (loanId) setPendingLoanId(loanId);
+    } catch {
+      /* noop */
+    }
   }, []);
+
+  // Once profile + assets are ready, open LoanModal for the pending QR target.
+  useEffect(() => {
+    if (!pendingLoanId || !profile || assets.length === 0) return;
+    const asset = assets.find((a) => a.id === pendingLoanId);
+    if (asset) {
+      setLoanAsset(asset);
+      setLoanFromQr(true);
+      setActiveView('equipment');
+    }
+    setPendingLoanId(null);
+    // Clean URL so refresh doesn't reopen
+    try {
+      const url = new URL(window.location.href);
+      url.searchParams.delete('loan');
+      window.history.replaceState({}, '', url.toString());
+    } catch {
+      /* noop */
+    }
+  }, [pendingLoanId, profile, assets]);
 
   useEffect(() => { if (rooms.length) localStore.saveRooms(rooms); }, [rooms]);
   useEffect(() => { if (equipment.length) localStore.saveEquipment(equipment); }, [equipment]);
@@ -96,6 +134,7 @@ export default function App() {
     setActiveView('dashboard');
   };
 
+  // Room booking — single-day time-slot overlap.
   const checkConflict = (resourceId: string, date: string, start: string, end: string) =>
     bookings.find((b) =>
       b.resourceId === resourceId &&
@@ -104,6 +143,16 @@ export default function App() {
       start < b.endTime &&
       end > b.startTime,
     );
+
+  // ICT loan — date-range overlap on a specific asset.
+  const checkLoanConflict = (assetId: string, startDate: string, returnDate: string) =>
+    bookings.find((b) => {
+      if (b.resourceId !== assetId) return false;
+      if (b.status === 'cancelled') return false;
+      const bStart = b.date;
+      const bEnd = b.returnDate ?? b.date;
+      return startDate <= bEnd && returnDate >= bStart;
+    });
 
   const submitBooking = (b: Omit<Booking, 'id' | 'createdAt'> & { purposeFinal: string }): string | null => {
     const conflict = checkConflict(b.resourceId, b.date, b.startTime, b.endTime);
@@ -118,6 +167,74 @@ export default function App() {
     };
     setBookings((prev) => [booking, ...prev]);
     void syncBookingToCloud(booking);
+    updateLastActive();
+    return null;
+  };
+
+  const submitLoan = (input: {
+    asset: Asset;
+    purpose: string;
+    startDate: string;
+    returnDate: string;
+  }): string | null => {
+    if (!profile) return 'Sila log masuk profil terlebih dahulu.';
+    const conflict = checkLoanConflict(input.asset.id, input.startDate, input.returnDate);
+    if (conflict) {
+      return `RALAT: ${input.asset.name} sudah dipinjam oleh ${conflict.userName} dari ${conflict.date} hingga ${conflict.returnDate ?? conflict.date}.`;
+    }
+    const booking: Booking = {
+      id: `loan-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      resourceId: input.asset.id,
+      resourceType: 'equipment',
+      userId: profile.id,
+      userName: profile.name,
+      date: input.startDate,
+      returnDate: input.returnDate,
+      startTime: '08:00',
+      endTime: '17:00',
+      purpose: input.purpose,
+      status: 'confirmed',
+      createdAt: Date.now(),
+    };
+    setBookings((prev) => [booking, ...prev]);
+    void syncBookingToCloud(booking);
+    updateLastActive();
+    return null;
+  };
+
+  const submitBulkLoan = (input: {
+    assets: Asset[];
+    purpose: string;
+    startDate: string;
+    returnDate: string;
+  }): string | null => {
+    if (!profile) return 'Sila log masuk profil terlebih dahulu.';
+    const blocked: string[] = [];
+    input.assets.forEach((a) => {
+      const conflict = checkLoanConflict(a.id, input.startDate, input.returnDate);
+      if (conflict) blocked.push(`${a.name} (${conflict.userName})`);
+    });
+    if (blocked.length > 0) {
+      return `RALAT: ${blocked.length} unit telah dipinjam: ${blocked.slice(0, 3).join(', ')}${blocked.length > 3 ? '...' : ''}`;
+    }
+
+    const now = Date.now();
+    const newBookings: Booking[] = input.assets.map((asset, i) => ({
+      id: `loan-${now}-${i}-${Math.random().toString(36).slice(2, 6)}`,
+      resourceId: asset.id,
+      resourceType: 'equipment' as const,
+      userId: profile.id,
+      userName: profile.name,
+      date: input.startDate,
+      returnDate: input.returnDate,
+      startTime: '08:00',
+      endTime: '17:00',
+      purpose: `${input.purpose} [PUKAL ×${input.assets.length}]`,
+      status: 'confirmed' as const,
+      createdAt: now + i,
+    }));
+    setBookings((prev) => [...newBookings, ...prev]);
+    newBookings.forEach((b) => void syncBookingToCloud(b));
     updateLastActive();
     return null;
   };
@@ -372,6 +489,7 @@ export default function App() {
                   }}
                   isAdmin={isAdmin}
                   onEdit={(r) => setEditingResource(r)}
+                  onBulkLoan={() => setShowBulkLoanModal(true)}
                 />
               )}
               {activeView === 'admin' && isAdmin && (
@@ -461,12 +579,19 @@ export default function App() {
         resourceId={selectedResourceId}
         assets={assets}
         equipment={equipment}
+        isAdmin={isAdmin}
         onClose={() => setShowAssetList(false)}
         onPick={(asset) => {
           setShowAssetList(false);
-          openBookingModal({ resourceId: asset.id, resourceType: 'equipment' });
+          setLoanFromQr(false);
+          setLoanAsset(asset);
         }}
         onAdd={() => setShowAddAssetModal(true)}
+        onShowQR={(asset) => setQrAsset(asset)}
+        onBulkLoan={() => {
+          setShowAssetList(false);
+          setShowBulkLoanModal(true);
+        }}
       />
 
       <AddAssetModal
@@ -492,6 +617,35 @@ export default function App() {
         resource={editingResource}
         onClose={() => setEditingResource(null)}
         onSave={saveResource}
+      />
+
+      <LoanModal
+        open={loanAsset !== null}
+        asset={loanAsset}
+        category={loanAsset ? equipment.find((e) => e.id === loanAsset.resourceId) ?? null : null}
+        profile={profile}
+        fromQr={loanFromQr}
+        onClose={() => {
+          setLoanAsset(null);
+          setLoanFromQr(false);
+        }}
+        onSubmit={submitLoan}
+      />
+
+      <BulkLoanModal
+        open={showBulkLoanModal}
+        assets={assets}
+        equipment={equipment}
+        profile={profile}
+        onClose={() => setShowBulkLoanModal(false)}
+        onSubmit={submitBulkLoan}
+      />
+
+      <QRCodeModal
+        open={qrAsset !== null}
+        asset={qrAsset}
+        category={qrAsset ? equipment.find((e) => e.id === qrAsset.resourceId) ?? null : null}
+        onClose={() => setQrAsset(null)}
       />
     </div>
   );

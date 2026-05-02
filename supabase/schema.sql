@@ -69,6 +69,7 @@ create table if not exists public.bookings (
   user_id text not null,
   user_name text not null,
   date date not null,
+  return_date date,
   start_time time not null,
   end_time time not null,
   purpose text,
@@ -76,10 +77,12 @@ create table if not exists public.bookings (
     check (status in ('pending', 'confirmed', 'cancelled')),
   created_at timestamptz not null default now()
 );
+alter table public.bookings add column if not exists return_date date;
 
 create index if not exists bookings_user_id_idx on public.bookings (user_id);
 create index if not exists bookings_date_idx on public.bookings (date);
 create index if not exists bookings_resource_idx on public.bookings (resource_id, date);
+create index if not exists bookings_resource_range_idx on public.bookings (resource_id, date, return_date);
 
 -- =========================================================================
 -- 6. ROW LEVEL SECURITY (development-friendly defaults)

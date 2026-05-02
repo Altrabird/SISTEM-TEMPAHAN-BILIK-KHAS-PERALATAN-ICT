@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, Plus, Info, Laptop } from 'lucide-react';
+import { X, Plus, Info, Laptop, QrCode, Package } from 'lucide-react';
 import { Asset, Resource } from '../types';
 
 interface Props {
@@ -8,12 +8,17 @@ interface Props {
   resourceId: string | null;
   assets: Asset[];
   equipment: Resource[];
+  isAdmin?: boolean;
   onClose: () => void;
   onPick: (asset: Asset) => void;
   onAdd: () => void;
+  onShowQR?: (asset: Asset) => void;
+  onBulkLoan?: () => void;
 }
 
-export function AssetListModal({ open, resourceId, assets, equipment, onClose, onPick, onAdd }: Props) {
+export function AssetListModal({
+  open, resourceId, assets, equipment, isAdmin, onClose, onPick, onAdd, onShowQR, onBulkLoan,
+}: Props) {
   if (!resourceId) return null;
   const filtered = assets.filter((a) => a.resourceId === resourceId);
   const eqName = equipment.find((e) => e.id === resourceId)?.name ?? 'Peralatan';
@@ -35,24 +40,40 @@ export function AssetListModal({ open, resourceId, assets, equipment, onClose, o
             exit={{ opacity: 0, scale: 0.95, y: 20 }}
             className="bg-[#f8fafc] rounded-2xl w-full max-w-5xl h-[85vh] relative shadow-2xl overflow-hidden border border-slate-200 flex flex-col"
           >
-            <div className="p-8 border-b border-slate-200 bg-white flex justify-between items-start shrink-0">
+            <div className="p-6 border-b border-slate-200 bg-white flex justify-between items-start shrink-0 gap-3 flex-wrap">
               <div>
-                <h2 className="text-2xl font-bold tracking-tight text-slate-800">Pinjam Peralatan: {eqName}</h2>
-                <p className="text-xs text-slate-500 mt-1 uppercase tracking-widest font-semibold">Pilih unit spesifik untuk tempahan</p>
+                <h2 className="text-xl font-bold tracking-tight text-slate-800">Pinjam Peralatan: {eqName}</h2>
+                <p className="text-xs text-slate-500 mt-1 uppercase tracking-widest font-semibold">
+                  Pilih unit spesifik untuk pinjaman
+                </p>
               </div>
-              <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-lg transition-colors text-slate-400 hover:text-slate-600">
-                <X size={20} />
-              </button>
+              <div className="flex gap-2 items-center">
+                {onBulkLoan && (
+                  <button
+                    onClick={onBulkLoan}
+                    className="bg-purple-600 text-white px-4 py-2 rounded-lg text-[10px] font-bold uppercase tracking-widest hover:bg-purple-700 transition-all shadow-md shadow-purple-500/20 flex items-center gap-2"
+                    title="Pinjam beberapa unit sekaligus"
+                  >
+                    <Package size={13} /> Pinjam Pukal
+                  </button>
+                )}
+                <button
+                  onClick={onClose}
+                  className="p-2 hover:bg-slate-100 rounded-lg transition-colors text-slate-400 hover:text-slate-600"
+                >
+                  <X size={20} />
+                </button>
+              </div>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-8">
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div className="flex-1 overflow-y-auto p-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
                 {filtered.map((asset) => (
                   <motion.div
                     key={asset.id}
                     className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm hover:border-blue-500 transition-all flex flex-col"
                   >
-                    <div className="h-40 bg-slate-100 relative group overflow-hidden">
+                    <div className="h-36 bg-slate-100 relative group overflow-hidden">
                       {asset.imageUrl ? (
                         <img
                           src={asset.imageUrl}
@@ -74,45 +95,58 @@ export function AssetListModal({ open, resourceId, assets, equipment, onClose, o
                           {asset.status}
                         </span>
                       </div>
+                      {isAdmin && onShowQR && (
+                        <button
+                          onClick={() => onShowQR(asset)}
+                          className="absolute top-3 right-3 bg-slate-900/80 backdrop-blur p-1.5 rounded-md text-white hover:bg-slate-900 transition-all"
+                          title="Janakan / cetak QR untuk unit ini"
+                        >
+                          <QrCode size={14} />
+                        </button>
+                      )}
                     </div>
-                    <div className="p-5 flex-1">
-                      <h3 className="font-bold text-lg text-slate-800">{asset.name}</h3>
+                    <div className="p-4 flex-1">
+                      <h3 className="font-bold text-base text-slate-800">{asset.name}</h3>
                       <p className="text-[10px] font-mono text-blue-600 uppercase mt-1">S/N: {asset.serialNumber}</p>
-                      <div className="mt-4 p-3 bg-slate-50 rounded-lg border border-slate-100">
-                        <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-1 items-center flex gap-1">
+                      <div className="mt-3 p-2.5 bg-slate-50 rounded-lg border border-slate-100">
+                        <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-0.5 items-center flex gap-1">
                           <Info size={10} /> Spesifikasi
                         </p>
-                        <p className="text-[11px] text-slate-600 line-clamp-2 leading-relaxed">{asset.specifications}</p>
+                        <p className="text-[11px] text-slate-600 line-clamp-2 leading-relaxed">
+                          {asset.specifications}
+                        </p>
                       </div>
                     </div>
-                    <div className="p-4 bg-slate-50 border-t border-slate-100 flex gap-2">
+                    <div className="p-3 bg-slate-50 border-t border-slate-100">
                       <button
                         disabled={asset.status !== 'available'}
                         onClick={() => onPick(asset)}
-                        className={`flex-1 py-2 rounded-lg text-xs font-bold uppercase tracking-widest transition-all ${
+                        className={`w-full py-2 rounded-lg text-xs font-bold uppercase tracking-widest transition-all ${
                           asset.status === 'available'
-                            ? 'bg-blue-600 text-white hover:bg-blue-700 shadow-md shadow-blue-500/10'
+                            ? 'bg-purple-600 text-white hover:bg-purple-700 shadow-md shadow-purple-500/10'
                             : 'bg-slate-200 text-slate-400 cursor-not-allowed'
                         }`}
                       >
-                        Pilih Unit
+                        Pinjam Unit Ini
                       </button>
                     </div>
                   </motion.div>
                 ))}
 
-                <button
-                  onClick={onAdd}
-                  className="bg-white border-2 border-dashed border-slate-200 rounded-xl flex flex-col items-center justify-center p-8 gap-3 group hover:border-blue-500 transition-all min-h-[300px]"
-                >
-                  <div className="w-12 h-12 rounded-full bg-slate-50 flex items-center justify-center text-slate-400 group-hover:bg-blue-600 group-hover:text-white transition-all">
-                    <Plus size={24} />
-                  </div>
-                  <div className="text-center">
-                    <p className="text-xs font-bold text-slate-600 uppercase">Tambah Unit Baru</p>
-                    <p className="text-[10px] text-slate-400 mt-1 uppercase tracking-tighter">Daftar Aset ICT</p>
-                  </div>
-                </button>
+                {isAdmin && (
+                  <button
+                    onClick={onAdd}
+                    className="bg-white border-2 border-dashed border-slate-200 rounded-xl flex flex-col items-center justify-center p-8 gap-3 group hover:border-blue-500 transition-all min-h-[300px]"
+                  >
+                    <div className="w-12 h-12 rounded-full bg-slate-50 flex items-center justify-center text-slate-400 group-hover:bg-blue-600 group-hover:text-white transition-all">
+                      <Plus size={24} />
+                    </div>
+                    <div className="text-center">
+                      <p className="text-xs font-bold text-slate-600 uppercase">Tambah Unit Baru</p>
+                      <p className="text-[10px] text-slate-400 mt-1 uppercase tracking-tighter">Daftar Aset ICT</p>
+                    </div>
+                  </button>
+                )}
               </div>
             </div>
           </motion.div>

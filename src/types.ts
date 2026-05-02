@@ -40,9 +40,10 @@ export interface Booking {
   resourceType: ResourceType;
   userName: string;
   userId: string;
-  date: string;
-  startTime: string;
-  endTime: string;
+  date: string;          // start date (YYYY-MM-DD)
+  returnDate?: string;   // end date for multi-day equipment loans (YYYY-MM-DD)
+  startTime: string;     // HH:mm
+  endTime: string;       // HH:mm
   purpose: string;
   status: 'pending' | 'confirmed' | 'cancelled';
   createdAt: number;

@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion } from 'motion/react';
-import { DoorOpen, Laptop, Plus, Pencil } from 'lucide-react';
+import { DoorOpen, Laptop, Plus, Pencil, Package } from 'lucide-react';
 import { Resource, ResourceType } from '../types';
 
 interface Props {
@@ -11,9 +11,10 @@ interface Props {
   onAdd?: () => void;
   isAdmin?: boolean;
   onEdit?: (resource: Resource) => void;
+  onBulkLoan?: () => void;
 }
 
-export function ResourceManagementView({ resources, title, type, onAction, onAdd, isAdmin, onEdit }: Props) {
+export function ResourceManagementView({ resources, title, type, onAction, onAdd, isAdmin, onEdit, onBulkLoan }: Props) {
   return (
     <div className="space-y-6">
       <div className="bg-white p-6 rounded-2xl border border-slate-200">
@@ -22,16 +23,24 @@ export function ResourceManagementView({ resources, title, type, onAction, onAdd
             <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest">{title}</h3>
             <p className="text-lg font-bold text-slate-800 leading-tight">Sistem Inventori & Rekod Penggunaan</p>
           </div>
-          {isAdmin && (
-            <div className="flex gap-3">
+          <div className="flex gap-2">
+            {type === 'equipment' && onBulkLoan && (
+              <button
+                onClick={onBulkLoan}
+                className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg text-[10px] font-bold uppercase tracking-widest hover:bg-purple-700 transition-all shadow-md shadow-purple-500/20"
+              >
+                <Package size={14} /> Pinjam Pukal
+              </button>
+            )}
+            {isAdmin && (
               <button
                 onClick={onAdd || (() => {})}
                 className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-[10px] font-bold uppercase tracking-widest hover:bg-blue-700 transition-all shadow-md shadow-blue-500/20"
               >
                 <Plus size={14} /> Tambah {type === 'room' ? 'Bilik' : 'Alatan'}
               </button>
-            </div>
-          )}
+            )}
+          </div>
         </div>
 
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
