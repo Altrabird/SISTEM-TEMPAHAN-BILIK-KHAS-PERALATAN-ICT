@@ -117,6 +117,14 @@ export async function uploadResourceImage(
   return uploadImage(file, `${prefix}-${safeId}-${Date.now()}.jpg`, 1024);
 }
 
+export async function uploadAssetImage(
+  file: File,
+  assetId: string,
+): Promise<{ url: string | null; error?: string }> {
+  const safeId = assetId.replace(/[^a-z0-9_-]/gi, '') || `new-${Date.now()}`;
+  return uploadImage(file, `asset-${safeId}.jpg`, 1024);
+}
+
 function rowToResource(row: any, type: 'room' | 'equipment'): Resource {
   return {
     id: row.id,
