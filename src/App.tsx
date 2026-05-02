@@ -149,15 +149,17 @@ export default function App() {
         animate={{ width: isSidebarOpen ? 280 : 80 }}
         className="app-sidebar bg-[#0f172a] text-slate-300 flex flex-col z-20 shrink-0"
       >
-        <div className="p-6 border-b border-slate-800">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center shrink-0">
+        <div className="p-5 border-b border-slate-800">
+          <div className="flex items-start gap-3">
+            <div className="w-9 h-9 bg-blue-600 rounded-lg flex items-center justify-center shrink-0">
               <CalendarDays className="text-white w-5 h-5" />
             </div>
             {isSidebarOpen && (
-              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="overflow-hidden whitespace-nowrap">
-                <h1 className="text-[10px] font-bold uppercase tracking-[0.2em] text-blue-400 leading-none">SKBT Booking</h1>
-                <p className="text-lg font-semibold text-white leading-tight mt-1">SISTEM 2026</p>
+              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex-1 min-w-0 pt-0.5">
+                <h1 className="text-[9px] font-bold uppercase tracking-[0.18em] text-blue-400 leading-tight">SK Bandar Tawau</h1>
+                <p className="text-[13px] font-bold text-white leading-snug mt-1">
+                  Sistem Tempahan Bilik Khas & Peralatan ICT
+                </p>
               </motion.div>
             )}
           </div>
