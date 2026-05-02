@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { CalendarDays, Clock, Search, Filter, Trash2, Download } from 'lucide-react';
+import { CalendarDays, Clock, Search, Filter, Trash2, Download, Printer } from 'lucide-react';
 import { Booking, Resource, Profile } from '../types';
 
 interface Props {
@@ -55,23 +55,113 @@ export function BookingsView({ bookings, rooms, equipment, profile, onCancel }: 
     URL.revokeObjectURL(url);
   };
 
+  const printList = () => window.print();
+
+  const printSingle = (b: Booking) => {
+    const resourceName = allResources.find((r) => r.id === b.resourceId)?.name ?? b.resourceId;
+    const w = window.open('', '_blank', 'width=800,height=900');
+    if (!w) {
+      alert('Pop-up disekat. Sila benarkan pop-up untuk laman ini.');
+      return;
+    }
+    const html = `<!doctype html>
+<html lang="ms">
+<head>
+<meta charset="utf-8">
+<title>Slip Tempahan #${b.id}</title>
+<style>
+  * { box-sizing: border-box; }
+  body { font-family: -apple-system, "Segoe UI", Roboto, sans-serif; color: #1e293b; margin: 0; padding: 32px; background: white; }
+  .wrap { max-width: 720px; margin: 0 auto; }
+  header { border-bottom: 3px solid #0f172a; padding-bottom: 16px; margin-bottom: 24px; display: flex; justify-content: space-between; align-items: flex-start; }
+  header h1 { margin: 0; font-size: 18px; letter-spacing: -0.01em; }
+  header p.sub { margin: 4px 0 0; font-size: 11px; color: #475569; text-transform: uppercase; letter-spacing: 0.15em; font-weight: 700; }
+  .badge { display: inline-block; padding: 6px 12px; background: #dbeafe; color: #1d4ed8; border-radius: 6px; font-size: 10px; font-weight: 800; letter-spacing: 0.15em; text-transform: uppercase; }
+  .badge.cancelled { background: #fee2e2; color: #b91c1c; }
+  h2 { font-size: 22px; margin: 24px 0 8px; letter-spacing: -0.02em; }
+  .meta { font-size: 12px; color: #64748b; margin: 0 0 24px; }
+  dl { display: grid; grid-template-columns: 160px 1fr; gap: 12px 16px; padding: 24px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; }
+  dt { font-size: 10px; font-weight: 800; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.15em; padding-top: 4px; }
+  dd { font-size: 14px; font-weight: 600; color: #1e293b; margin: 0; }
+  dd.purpose { white-space: pre-wrap; }
+  footer { margin-top: 48px; padding-top: 16px; border-top: 1px solid #e2e8f0; font-size: 10px; color: #94a3b8; text-align: center; }
+  .sig { margin-top: 56px; display: grid; grid-template-columns: 1fr 1fr; gap: 48px; }
+  .sig div { border-top: 1px solid #94a3b8; padding-top: 6px; font-size: 11px; color: #64748b; text-align: center; }
+  @media print { body { padding: 16px; } @page { margin: 1.5cm; size: A4; } }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div>
+        <p class="sub">SK Bandar Tawau</p>
+        <h1>Sistem Tempahan Bilik Khas & Peralatan ICT</h1>
+        <p class="sub" style="margin-top: 8px;">Slip Tempahan Rasmi</p>
+      </div>
+      <span class="badge ${b.status === 'cancelled' ? 'cancelled' : ''}">${b.status}</span>
+    </header>
+
+    <h2>${escapeHtml(resourceName)}</h2>
+    <p class="meta">Rujukan: <code>#${escapeHtml(b.id)}</code></p>
+
+    <dl>
+      <dt>Pemohon</dt><dd>${escapeHtml(b.userName)}</dd>
+      <dt>Sumber</dt><dd>${escapeHtml(resourceName)} (${b.resourceType === 'room' ? 'Bilik Khas' : 'Peralatan ICT'})</dd>
+      <dt>Tarikh</dt><dd>${escapeHtml(b.date)}</dd>
+      <dt>Slot Masa</dt><dd>${b.startTime} - ${b.endTime}</dd>
+      <dt>Tujuan</dt><dd class="purpose">${escapeHtml(b.purpose)}</dd>
+      <dt>Status</dt><dd>${escapeHtml(b.status.toUpperCase())}</dd>
+      <dt>Tarikh Dicipta</dt><dd>${new Date(b.createdAt).toLocaleString('ms-MY')}</dd>
+    </dl>
+
+    <div class="sig">
+      <div>Tandatangan Pemohon</div>
+      <div>Tandatangan Pengesahan / Pentadbir</div>
+    </div>
+
+    <footer>
+      Dijana oleh SKBT Booking System • Dicetak pada ${new Date().toLocaleString('ms-MY')}
+    </footer>
+  </div>
+  <script>window.onload = () => { window.print(); }</script>
+</body>
+</html>`;
+    w.document.write(html);
+    w.document.close();
+  };
+
   return (
-    <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-      <div className="p-6 border-b border-slate-100 bg-white space-y-4">
+    <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden print-area">
+      {/* Print-only header */}
+      <div className="hidden print:block p-6 border-b-2 border-slate-900">
+        <p className="text-[10px] font-bold uppercase tracking-widest text-slate-700">SK Bandar Tawau</p>
+        <h1 className="text-lg font-black text-slate-900">Sistem Tempahan Bilik Khas & Peralatan ICT</h1>
+        <p className="text-xs font-bold text-slate-700 uppercase tracking-widest mt-1">
+          Senarai Tempahan • {filtered.length} rekod • Dicetak {new Date().toLocaleDateString('ms-MY', { day: 'numeric', month: 'long', year: 'numeric' })}
+        </p>
+      </div>
+
+      <div className="p-6 border-b border-slate-100 bg-white space-y-4 no-print">
         <div className="flex items-center justify-between gap-4 flex-wrap">
           <div>
             <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest">Arkib Tempahan</h3>
             <p className="text-lg font-bold text-slate-800 leading-tight">Rekod Penggunaan Sumber</p>
           </div>
-          <div className="flex gap-2 items-center">
+          <div className="flex gap-2 items-center flex-wrap">
             <span className="text-[10px] font-bold px-3 py-1 bg-slate-50 text-slate-600 rounded-full border border-slate-200 uppercase tracking-widest">
               {filtered.length} / {bookings.length} Rekod
             </span>
             <button
               onClick={exportCSV}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-900 text-white text-[10px] font-bold uppercase tracking-widest rounded-lg hover:bg-slate-700 transition-all"
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 text-slate-700 text-[10px] font-bold uppercase tracking-widest rounded-lg hover:bg-slate-200 transition-all"
             >
               <Download size={12} /> CSV
+            </button>
+            <button
+              onClick={printList}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-900 text-white text-[10px] font-bold uppercase tracking-widest rounded-lg hover:bg-slate-700 transition-all"
+            >
+              <Printer size={12} /> Cetak Senarai
             </button>
           </div>
         </div>
@@ -116,7 +206,7 @@ export function BookingsView({ bookings, rooms, equipment, profile, onCancel }: 
               <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-slate-500">Slot Masa</th>
               <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-slate-500">Pemohon</th>
               <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-slate-500">Status</th>
-              <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-slate-500"></th>
+              <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-slate-500 no-print"></th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
@@ -158,18 +248,27 @@ export function BookingsView({ bookings, rooms, equipment, profile, onCancel }: 
                     {b.status}
                   </span>
                 </td>
-                <td className="px-6 py-4">
-                  {b.status !== 'cancelled' && profile && b.userId === profile.id && (
+                <td className="px-6 py-4 no-print">
+                  <div className="flex items-center justify-end gap-1">
                     <button
-                      onClick={() => {
-                        if (confirm('Batalkan tempahan ini?')) onCancel(b.id);
-                      }}
-                      className="p-1.5 rounded-lg text-slate-400 hover:bg-rose-50 hover:text-rose-600 transition-colors"
-                      title="Batalkan"
+                      onClick={() => printSingle(b)}
+                      className="p-1.5 rounded-lg text-slate-400 hover:bg-blue-50 hover:text-blue-600 transition-colors"
+                      title="Cetak slip tempahan ini"
                     >
-                      <Trash2 size={14} />
+                      <Printer size={14} />
                     </button>
-                  )}
+                    {b.status !== 'cancelled' && profile && b.userId === profile.id && (
+                      <button
+                        onClick={() => {
+                          if (confirm('Batalkan tempahan ini?')) onCancel(b.id);
+                        }}
+                        className="p-1.5 rounded-lg text-slate-400 hover:bg-rose-50 hover:text-rose-600 transition-colors"
+                        title="Batalkan"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    )}
+                  </div>
                 </td>
               </tr>
             )) : (
@@ -184,4 +283,13 @@ export function BookingsView({ bookings, rooms, equipment, profile, onCancel }: 
       </div>
     </div>
   );
+}
+
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 }

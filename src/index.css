@@ -36,3 +36,64 @@ body {
   background: #CCC;
 }
 
+/* ========================================================================
+   Print styles — applied only when the user prints (Cmd/Ctrl+P or Cetak).
+   Strips chrome (sidebar, header, modals, action buttons) and presents a
+   clean A4-friendly report.
+   ======================================================================== */
+@media print {
+  /* Reset background to white for paper */
+  html, body, #root {
+    background: white !important;
+    color: black !important;
+    height: auto !important;
+    overflow: visible !important;
+  }
+
+  /* Hide elements explicitly marked no-print */
+  .no-print { display: none !important; }
+
+  /* Hide app shell (sidebar + header) */
+  .app-sidebar { display: none !important; }
+  .app-header { display: none !important; }
+
+  /* Make main flex layout print-friendly */
+  .app-main {
+    display: block !important;
+    overflow: visible !important;
+  }
+
+  .app-content {
+    overflow: visible !important;
+    padding: 0 !important;
+    background: white !important;
+  }
+
+  /* Avoid page breaks inside cards/sections */
+  .print\:break-inside-avoid {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  /* Tables should not split rows awkwardly */
+  table { break-inside: auto; }
+  tr { break-inside: avoid; }
+
+  /* Page margin */
+  @page {
+    margin: 1.5cm 1.2cm;
+    size: A4;
+  }
+
+  /* Hide modals when printing */
+  [class*="z-50"], [class*="z-\\[50\\]"], [class*="z-\\[60\\]"], [class*="z-\\[80\\]"], [class*="z-\\[100\\]"] {
+    display: none !important;
+  }
+
+  /* But allow the printable area to render */
+  .print-area, .print-area * { display: revert; }
+
+  /* Force explicit colors to print (Chrome) */
+  * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+}
+

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import {
   LayoutDashboard, CalendarDays, DoorOpen, Laptop, Settings,
-  Plus, Menu, X, UserCircle2, Sparkles, Shield, LogOut
+  Plus, Menu, X, UserCircle2, Sparkles, Shield, LogOut, FileText
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { INITIAL_ROOMS, INITIAL_EQUIPMENT, INITIAL_ASSETS, ROLE_LABELS } from './constants';
@@ -15,6 +15,7 @@ import { ResourceManagementView } from './views/ResourceManagementView';
 import { SettingsView } from './views/SettingsView';
 import { PortfolioView } from './views/PortfolioView';
 import { AdminView } from './views/AdminView';
+import { ReportsView } from './views/ReportsView';
 
 import { OnboardingModal } from './components/OnboardingModal';
 import { BookingModal } from './components/BookingModal';
@@ -22,7 +23,7 @@ import { AssetListModal } from './components/AssetListModal';
 import { AddAssetModal } from './components/AddAssetModal';
 import { EditProfileModal } from './components/EditProfileModal';
 
-type View = 'dashboard' | 'portfolio' | 'bookings' | 'rooms' | 'equipment' | 'admin' | 'settings';
+type View = 'dashboard' | 'portfolio' | 'bookings' | 'rooms' | 'equipment' | 'admin' | 'reports' | 'settings';
 
 export default function App() {
   const [activeView, setActiveView] = useState<View>('dashboard');
@@ -121,6 +122,7 @@ export default function App() {
     ...(isAdmin
       ? [
           { id: 'admin' as View, label: 'Pentadbir', icon: Shield },
+          { id: 'reports' as View, label: 'Laporan', icon: FileText },
           { id: 'settings' as View, label: 'Tetapan', icon: Settings },
         ]
       : []),
@@ -145,7 +147,7 @@ export default function App() {
       <motion.aside
         initial={false}
         animate={{ width: isSidebarOpen ? 280 : 80 }}
-        className="bg-[#0f172a] text-slate-300 flex flex-col z-20 shrink-0"
+        className="app-sidebar bg-[#0f172a] text-slate-300 flex flex-col z-20 shrink-0"
       >
         <div className="p-6 border-b border-slate-800">
           <div className="flex items-center gap-3">
@@ -249,8 +251,8 @@ export default function App() {
         </div>
       </motion.aside>
 
-      <main className="flex-1 flex flex-col relative overflow-hidden">
-        <header className="h-16 border-b border-slate-200 bg-white flex items-center justify-between px-8 z-10 shrink-0 shadow-sm shadow-slate-200/50">
+      <main className="app-main flex-1 flex flex-col relative overflow-hidden">
+        <header className="app-header h-16 border-b border-slate-200 bg-white flex items-center justify-between px-8 z-10 shrink-0 shadow-sm shadow-slate-200/50">
           <h2 className="text-xs font-bold uppercase tracking-widest text-slate-400">
             {navItems.find((n) => n.id === activeView)?.label}
           </h2>
@@ -274,7 +276,7 @@ export default function App() {
           </div>
         </header>
 
-        <div className="flex-1 overflow-y-auto p-8 bg-[#f8fafc]">
+        <div className="app-content flex-1 overflow-y-auto p-8 bg-[#f8fafc]">
           <AnimatePresence mode="wait">
             <motion.div
               key={activeView}
@@ -343,6 +345,24 @@ export default function App() {
                   equipment={equipment}
                   localBookings={bookings}
                 />
+              )}
+              {activeView === 'reports' && isAdmin && (
+                <ReportsView
+                  rooms={rooms}
+                  equipment={equipment}
+                  localBookings={bookings}
+                />
+              )}
+              {activeView === 'reports' && !isAdmin && (
+                <div className="max-w-lg mx-auto bg-white rounded-3xl border border-rose-200 p-12 text-center shadow-sm">
+                  <div className="w-16 h-16 mx-auto rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center mb-4">
+                    <FileText size={32} />
+                  </div>
+                  <h2 className="text-xl font-bold text-slate-800">Akses Terhad</h2>
+                  <p className="text-sm text-slate-500 mt-2">
+                    Laporan rumusan sistem hanya boleh diakses oleh Pentadbir.
+                  </p>
+                </div>
               )}
               {activeView === 'admin' && !isAdmin && (
                 <div className="max-w-lg mx-auto bg-white rounded-3xl border border-rose-200 p-12 text-center shadow-sm">
