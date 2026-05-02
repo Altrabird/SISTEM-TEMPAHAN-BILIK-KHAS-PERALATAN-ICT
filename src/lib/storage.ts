@@ -69,9 +69,10 @@ async function resizeImage(file: File | Blob, maxSize = 512, quality = 0.85): Pr
   });
 }
 
-export async function uploadAvatar(
+async function uploadImage(
   file: File,
-  userId: string,
+  filename: string,
+  maxSize: number,
 ): Promise<{ url: string | null; error?: string }> {
   if (!isSupabaseEnabled || !supabase) {
     return { url: null, error: 'Supabase belum dikonfig.' };
@@ -80,9 +81,7 @@ export async function uploadAvatar(
     return { url: null, error: 'Sila pilih fail gambar sahaja.' };
   }
   try {
-    const blob = await resizeImage(file, 512, 0.85);
-    const safeId = userId.replace(/[^a-z0-9_-]/gi, '');
-    const filename = `avatar-${safeId}-${Date.now()}.jpg`;
+    const blob = await resizeImage(file, maxSize, 0.85);
     const { error: uploadError } = await supabase.storage
       .from('images')
       .upload(filename, blob, {
@@ -94,10 +93,73 @@ export async function uploadAvatar(
       return { url: null, error: uploadError.message };
     }
     const { data } = supabase.storage.from('images').getPublicUrl(filename);
-    return { url: data.publicUrl };
+    // Cache-bust so changes appear immediately
+    return { url: `${data.publicUrl}?t=${Date.now()}` };
   } catch (err: any) {
     return { url: null, error: err?.message ?? 'Ralat tidak diketahui semasa muat naik.' };
   }
+}
+
+export async function uploadAvatar(
+  file: File,
+  userId: string,
+): Promise<{ url: string | null; error?: string }> {
+  const safeId = userId.replace(/[^a-z0-9_-]/gi, '');
+  return uploadImage(file, `avatar-${safeId}-${Date.now()}.jpg`, 512);
+}
+
+export async function uploadResourceImage(
+  file: File,
+  resource: { id: string; type: 'room' | 'equipment' },
+): Promise<{ url: string | null; error?: string }> {
+  const safeId = resource.id.replace(/[^a-z0-9_-]/gi, '');
+  const prefix = resource.type === 'room' ? 'room' : 'equipment';
+  return uploadImage(file, `${prefix}-${safeId}-${Date.now()}.jpg`, 1024);
+}
+
+function rowToResource(row: any, type: 'room' | 'equipment'): Resource {
+  return {
+    id: row.id,
+    name: row.name,
+    type,
+    description: row.description ?? undefined,
+    imageUrl: row.image_url ?? undefined,
+    capacity: row.capacity ?? undefined,
+    quantity: row.quantity ?? undefined,
+  };
+}
+
+export async function fetchRoomsFromCloud(): Promise<Resource[] | null> {
+  if (!isSupabaseEnabled || !supabase) return null;
+  const { data, error } = await supabase.from('rooms').select('*').order('name');
+  if (error || !data) return null;
+  return data.map((r: any) => rowToResource(r, 'room'));
+}
+
+export async function fetchEquipmentFromCloud(): Promise<Resource[] | null> {
+  if (!isSupabaseEnabled || !supabase) return null;
+  const { data, error } = await supabase.from('equipment').select('*').order('name');
+  if (error || !data) return null;
+  return data.map((r: any) => rowToResource(r, 'equipment'));
+}
+
+export async function upsertResourceToCloud(resource: Resource): Promise<{ ok: boolean; error?: string }> {
+  if (!isSupabaseEnabled || !supabase) {
+    return { ok: false, error: 'Supabase belum dikonfig.' };
+  }
+  const table = resource.type === 'room' ? 'rooms' : 'equipment';
+  const row: Record<string, any> = {
+    id: resource.id,
+    name: resource.name,
+    description: resource.description ?? null,
+    image_url: resource.imageUrl ?? null,
+  };
+  if (resource.type === 'room') row.capacity = resource.capacity ?? null;
+  else row.quantity = resource.quantity ?? null;
+
+  const { error } = await supabase.from(table).upsert(row);
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
 }
 
 export async function syncProfileToCloud(profile: Profile): Promise<{ ok: boolean; error?: string }> {

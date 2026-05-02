@@ -29,6 +29,7 @@ export interface Resource {
   name: string;
   type: ResourceType;
   description?: string;
+  imageUrl?: string;
   capacity?: number;
   quantity?: number;
 }

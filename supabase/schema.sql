@@ -25,8 +25,10 @@ create table if not exists public.rooms (
   id text primary key,
   name text not null,
   description text,
+  image_url text,
   capacity integer
 );
+alter table public.rooms add column if not exists image_url text;
 
 -- =========================================================================
 -- 3. EQUIPMENT
@@ -35,8 +37,10 @@ create table if not exists public.equipment (
   id text primary key,
   name text not null,
   description text,
+  image_url text,
   quantity integer
 );
+alter table public.equipment add column if not exists image_url text;
 
 -- =========================================================================
 -- 4. ASSETS (specific units of equipment)
@@ -100,6 +104,8 @@ drop policy if exists "insert bookings"    on public.bookings;
 drop policy if exists "update bookings"    on public.bookings;
 drop policy if exists "insert assets"      on public.assets;
 drop policy if exists "update assets"      on public.assets;
+drop policy if exists "update rooms"       on public.rooms;
+drop policy if exists "update equipment"   on public.equipment;
 
 -- Open read for everyone (good for an internal school tool)
 create policy "read all profiles"  on public.profiles  for select using (true);
@@ -117,6 +123,9 @@ create policy "update bookings"  on public.bookings  for update using (true);
 
 create policy "insert assets"    on public.assets    for insert with check (true);
 create policy "update assets"    on public.assets    for update using (true);
+
+create policy "update rooms"     on public.rooms     for update using (true);
+create policy "update equipment" on public.equipment for update using (true);
 
 -- =========================================================================
 -- 7. SEED DATA (optional — matches src/constants.ts)

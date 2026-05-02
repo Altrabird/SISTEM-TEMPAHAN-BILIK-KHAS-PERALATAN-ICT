@@ -6,7 +6,14 @@ import {
 import { motion, AnimatePresence } from 'motion/react';
 import { INITIAL_ROOMS, INITIAL_EQUIPMENT, INITIAL_ASSETS, ROLE_LABELS } from './constants';
 import { Booking, Resource, Asset, Profile } from './types';
-import { localStore, syncProfileToCloud, syncBookingToCloud } from './lib/storage';
+import {
+  localStore,
+  syncProfileToCloud,
+  syncBookingToCloud,
+  fetchRoomsFromCloud,
+  fetchEquipmentFromCloud,
+  upsertResourceToCloud,
+} from './lib/storage';
 import { isSupabaseEnabled } from './lib/supabase';
 
 import { DashboardView } from './views/DashboardView';
@@ -22,6 +29,7 @@ import { BookingModal } from './components/BookingModal';
 import { AssetListModal } from './components/AssetListModal';
 import { AddAssetModal } from './components/AddAssetModal';
 import { EditProfileModal } from './components/EditProfileModal';
+import { EditResourceModal } from './components/EditResourceModal';
 
 type View = 'dashboard' | 'portfolio' | 'bookings' | 'rooms' | 'equipment' | 'admin' | 'reports' | 'settings';
 
@@ -42,6 +50,7 @@ export default function App() {
   const [showAddAssetModal, setShowAddAssetModal] = useState(false);
   const [showBookingModal, setShowBookingModal] = useState(false);
   const [showEditProfileModal, setShowEditProfileModal] = useState(false);
+  const [editingResource, setEditingResource] = useState<Resource | null>(null);
   const [bookingInitial, setBookingInitial] = useState<Partial<Booking>>({});
 
   useEffect(() => {
@@ -51,6 +60,17 @@ export default function App() {
     setBookings(localStore.getBookings());
     setProfile(localStore.getProfile());
     setProfileLoaded(true);
+
+    // Pull latest rooms + equipment from Supabase so admin edits
+    // (image, description) propagate across devices.
+    void (async () => {
+      const [cloudRooms, cloudEquipment] = await Promise.all([
+        fetchRoomsFromCloud(),
+        fetchEquipmentFromCloud(),
+      ]);
+      if (cloudRooms && cloudRooms.length > 0) setRooms(cloudRooms);
+      if (cloudEquipment && cloudEquipment.length > 0) setEquipment(cloudEquipment);
+    })();
   }, []);
 
   useEffect(() => { if (rooms.length) localStore.saveRooms(rooms); }, [rooms]);
@@ -104,6 +124,15 @@ export default function App() {
 
   const cancelBooking = (id: string) => {
     setBookings((prev) => prev.map((b) => (b.id === id ? { ...b, status: 'cancelled' } : b)));
+  };
+
+  const saveResource = (r: Resource) => {
+    if (r.type === 'room') {
+      setRooms((prev) => prev.map((x) => (x.id === r.id ? r : x)));
+    } else {
+      setEquipment((prev) => prev.map((x) => (x.id === r.id ? r : x)));
+    }
+    void upsertResourceToCloud(r);
   };
 
   const openBookingModal = (initial: Partial<Booking> = {}) => {
@@ -324,6 +353,8 @@ export default function App() {
                   title="Bilik Khas"
                   type="room"
                   onAction={(id) => openBookingModal({ resourceId: id, resourceType: 'room' })}
+                  isAdmin={isAdmin}
+                  onEdit={(r) => setEditingResource(r)}
                 />
               )}
               {activeView === 'equipment' && (
@@ -339,6 +370,8 @@ export default function App() {
                     setSelectedResourceId(null);
                     setShowAddAssetModal(true);
                   }}
+                  isAdmin={isAdmin}
+                  onEdit={(r) => setEditingResource(r)}
                 />
               )}
               {activeView === 'admin' && isAdmin && (
@@ -453,6 +486,13 @@ export default function App() {
           onSave={(p) => setProfile(p)}
         />
       )}
+
+      <EditResourceModal
+        open={editingResource !== null}
+        resource={editingResource}
+        onClose={() => setEditingResource(null)}
+        onSave={saveResource}
+      />
     </div>
   );
 }
