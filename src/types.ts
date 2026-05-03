@@ -47,8 +47,13 @@ export interface Booking {
   startTime: string;     // HH:mm
   endTime: string;       // HH:mm
   purpose: string;
-  status: 'pending' | 'confirmed' | 'cancelled';
+  status: 'pending' | 'confirmed' | 'cancelled' | 'returned';
   createdAt: number;
+  // Return logging (set when admin marks an ICT loan as returned)
+  returnedAt?: number;       // timestamp of actual return
+  returnedById?: string;     // admin profile id
+  returnedByName?: string;   // admin name (denormalised)
+  returnNotes?: string;      // condition / damage notes
 }
 
 export type AchievementId =

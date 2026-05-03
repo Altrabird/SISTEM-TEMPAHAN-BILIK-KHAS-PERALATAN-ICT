@@ -243,10 +243,17 @@ export function BookingsView({ bookings, rooms, equipment, profile, onCancel }: 
                   <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest border ${
                     b.status === 'confirmed' ? 'bg-blue-50 text-blue-600 border-blue-100' :
                     b.status === 'cancelled' ? 'bg-rose-50 text-rose-600 border-rose-100' :
+                    b.status === 'returned' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
                     'bg-amber-50 text-amber-600 border-amber-100'
                   }`}>
-                    {b.status}
+                    {b.status === 'returned' ? 'Pulang' : b.status}
                   </span>
+                  {b.status === 'returned' && b.returnedAt && (
+                    <p className="text-[10px] text-emerald-700 mt-0.5 font-bold">
+                      {new Date(b.returnedAt).toLocaleDateString('ms-MY', { day: 'numeric', month: 'short' })}
+                      {b.returnedByName && <span className="text-slate-400 font-normal"> · {b.returnedByName}</span>}
+                    </p>
+                  )}
                 </td>
                 <td className="px-6 py-4 no-print">
                   <div className="flex items-center justify-end gap-1">
@@ -257,7 +264,7 @@ export function BookingsView({ bookings, rooms, equipment, profile, onCancel }: 
                     >
                       <Printer size={14} />
                     </button>
-                    {b.status !== 'cancelled' && profile && b.userId === profile.id && (
+                    {b.status === 'confirmed' && profile && b.userId === profile.id && (
                       <button
                         onClick={() => {
                           if (confirm('Batalkan tempahan ini?')) onCancel(b.id);

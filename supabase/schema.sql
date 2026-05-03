@@ -79,16 +79,29 @@ create table if not exists public.bookings (
   start_time time not null,
   end_time time not null,
   purpose text,
-  status text not null default 'confirmed'
-    check (status in ('pending', 'confirmed', 'cancelled')),
-  created_at timestamptz not null default now()
+  status text not null default 'confirmed',
+  created_at timestamptz not null default now(),
+  returned_at      timestamptz,
+  returned_by_id   text,
+  returned_by_name text,
+  return_notes     text
 );
-alter table public.bookings add column if not exists return_date date;
+alter table public.bookings add column if not exists return_date      date;
+alter table public.bookings add column if not exists returned_at      timestamptz;
+alter table public.bookings add column if not exists returned_by_id   text;
+alter table public.bookings add column if not exists returned_by_name text;
+alter table public.bookings add column if not exists return_notes     text;
 
-create index if not exists bookings_user_id_idx on public.bookings (user_id);
-create index if not exists bookings_date_idx on public.bookings (date);
-create index if not exists bookings_resource_idx on public.bookings (resource_id, date);
-create index if not exists bookings_resource_range_idx on public.bookings (resource_id, date, return_date);
+-- Status enum (handle migration from old 3-value enum to new 4-value enum)
+alter table public.bookings drop constraint if exists bookings_status_check;
+alter table public.bookings add  constraint bookings_status_check
+  check (status in ('pending', 'confirmed', 'cancelled', 'returned'));
+
+create index if not exists bookings_user_id_idx          on public.bookings (user_id);
+create index if not exists bookings_date_idx             on public.bookings (date);
+create index if not exists bookings_resource_idx         on public.bookings (resource_id, date);
+create index if not exists bookings_resource_range_idx   on public.bookings (resource_id, date, return_date);
+create index if not exists bookings_returned_idx         on public.bookings (returned_at);
 
 -- =========================================================================
 -- 6. ROW LEVEL SECURITY (development-friendly defaults)

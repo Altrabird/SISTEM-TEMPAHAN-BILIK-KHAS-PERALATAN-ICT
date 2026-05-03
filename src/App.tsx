@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import {
   LayoutDashboard, CalendarDays, DoorOpen, Laptop, Settings,
-  Plus, Menu, X, UserCircle2, Sparkles, Shield, LogOut, FileText
+  Plus, Menu, X, UserCircle2, Sparkles, Shield, LogOut, FileText, PackageCheck
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { INITIAL_ROOMS, INITIAL_EQUIPMENT, INITIAL_ASSETS, ROLE_LABELS } from './constants';
@@ -17,6 +17,7 @@ import {
   upsertAssetToCloud,
   deleteAssetFromCloud,
   fetchBookingsFromCloud,
+  updateBookingInCloud,
 } from './lib/storage';
 import { isAssetLocked, isResourceLocked, lockReasonOf } from './lib/locks';
 import { isSupabaseEnabled } from './lib/supabase';
@@ -28,6 +29,7 @@ import { SettingsView } from './views/SettingsView';
 import { PortfolioView } from './views/PortfolioView';
 import { AdminView } from './views/AdminView';
 import { ReportsView } from './views/ReportsView';
+import { ActiveLoansView } from './views/ActiveLoansView';
 
 import { OnboardingModal } from './components/OnboardingModal';
 import { BookingModal } from './components/BookingModal';
@@ -41,8 +43,9 @@ import { QRCodeModal } from './components/QRCodeModal';
 import { LockAssetModal } from './components/LockAssetModal';
 import { EditAssetModal } from './components/EditAssetModal';
 import { BulkAssetActionsModal, BulkAction } from './components/BulkAssetActionsModal';
+import { ReturnLoanModal } from './components/ReturnLoanModal';
 
-type View = 'dashboard' | 'portfolio' | 'bookings' | 'rooms' | 'equipment' | 'admin' | 'reports' | 'settings';
+type View = 'dashboard' | 'portfolio' | 'bookings' | 'rooms' | 'equipment' | 'admin' | 'reports' | 'loans' | 'settings';
 
 export default function App() {
   const [activeView, setActiveView] = useState<View>('dashboard');
@@ -72,6 +75,7 @@ export default function App() {
   const [lockingAsset, setLockingAsset] = useState<Asset | null>(null);
   const [editingAsset, setEditingAsset] = useState<Asset | null>(null);
   const [showBulkAssetActions, setShowBulkAssetActions] = useState(false);
+  const [returningLoan, setReturningLoan] = useState<{ booking: Booking; asset: Asset | null } | null>(null);
 
   useEffect(() => {
     setRooms(localStore.getRooms(INITIAL_ROOMS));
@@ -282,7 +286,26 @@ export default function App() {
   };
 
   const cancelBooking = (id: string) => {
-    setBookings((prev) => prev.map((b) => (b.id === id ? { ...b, status: 'cancelled' } : b)));
+    setBookings((prev) => {
+      const next = prev.map((b) => (b.id === id ? { ...b, status: 'cancelled' as const } : b));
+      const updated = next.find((b) => b.id === id);
+      if (updated) void updateBookingInCloud(updated);
+      return next;
+    });
+  };
+
+  const markLoanReturned = (booking: Booking, notes: string) => {
+    if (!profile) return;
+    const updated: Booking = {
+      ...booking,
+      status: 'returned',
+      returnedAt: Date.now(),
+      returnedById: profile.id,
+      returnedByName: profile.name,
+      returnNotes: notes || undefined,
+    };
+    setBookings((prev) => prev.map((b) => (b.id === booking.id ? updated : b)));
+    void updateBookingInCloud(updated);
   };
 
   const saveResource = (r: Resource) => {
@@ -355,6 +378,7 @@ export default function App() {
     ...(isAdmin
       ? [
           { id: 'admin' as View, label: 'Pentadbir', icon: Shield },
+          { id: 'loans' as View, label: 'Pinjaman ICT', icon: PackageCheck },
           { id: 'reports' as View, label: 'Laporan', icon: FileText },
           { id: 'settings' as View, label: 'Tetapan', icon: Settings },
         ]
@@ -593,6 +617,26 @@ export default function App() {
                   localBookings={bookings}
                 />
               )}
+              {activeView === 'loans' && isAdmin && (
+                <ActiveLoansView
+                  rooms={rooms}
+                  equipment={equipment}
+                  localBookings={bookings}
+                  localAssets={assets}
+                  onMarkReturn={(booking, asset) => setReturningLoan({ booking, asset })}
+                />
+              )}
+              {activeView === 'loans' && !isAdmin && (
+                <div className="max-w-lg mx-auto bg-white rounded-3xl border border-rose-200 p-12 text-center shadow-sm">
+                  <div className="w-16 h-16 mx-auto rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center mb-4">
+                    <PackageCheck size={32} />
+                  </div>
+                  <h2 className="text-xl font-bold text-slate-800">Akses Terhad</h2>
+                  <p className="text-sm text-slate-500 mt-2">
+                    Hanya Pentadbir boleh memproses pemulangan ICT.
+                  </p>
+                </div>
+              )}
               {activeView === 'reports' && !isAdmin && (
                 <div className="max-w-lg mx-auto bg-white rounded-3xl border border-rose-200 p-12 text-center shadow-sm">
                   <div className="w-16 h-16 mx-auto rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center mb-4">
@@ -764,6 +808,21 @@ export default function App() {
         equipment={equipment}
         onClose={() => setShowBulkAssetActions(false)}
         onApply={applyBulkAssetAction}
+      />
+
+      <ReturnLoanModal
+        open={returningLoan !== null}
+        booking={returningLoan?.booking ?? null}
+        asset={returningLoan?.asset ?? null}
+        category={returningLoan?.asset
+          ? equipment.find((e) => e.id === returningLoan.asset!.resourceId) ?? null
+          : null}
+        admin={profile}
+        onClose={() => setReturningLoan(null)}
+        onConfirm={(b, notes) => {
+          markLoanReturned(b, notes);
+          setReturningLoan(null);
+        }}
       />
     </div>
   );

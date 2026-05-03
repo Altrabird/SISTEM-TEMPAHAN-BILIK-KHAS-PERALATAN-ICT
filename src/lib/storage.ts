@@ -260,6 +260,22 @@ export async function syncBookingToCloud(booking: Booking): Promise<{ ok: boolea
   return { ok: true };
 }
 
+/** Update an existing booking row (e.g., return logging, cancellation). */
+export async function updateBookingInCloud(booking: Booking): Promise<{ ok: boolean; error?: string }> {
+  if (!isSupabaseEnabled || !supabase) {
+    return { ok: false, error: 'Supabase not configured' };
+  }
+  const { error } = await supabase.from('bookings').update({
+    status: booking.status,
+    returned_at: booking.returnedAt ? new Date(booking.returnedAt).toISOString() : null,
+    returned_by_id: booking.returnedById ?? null,
+    returned_by_name: booking.returnedByName ?? null,
+    return_notes: booking.returnNotes ?? null,
+  }).eq('id', booking.id);
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
+}
+
 export async function fetchProfileById(id: string): Promise<Profile | null> {
   if (!isSupabaseEnabled || !supabase) return null;
   const { data, error } = await supabase
@@ -318,5 +334,9 @@ export async function fetchBookingsFromCloud(): Promise<Booking[] | null> {
     purpose: row.purpose,
     status: row.status,
     createdAt: new Date(row.created_at).getTime(),
+    returnedAt: row.returned_at ? new Date(row.returned_at).getTime() : undefined,
+    returnedById: row.returned_by_id ?? undefined,
+    returnedByName: row.returned_by_name ?? undefined,
+    returnNotes: row.return_notes ?? undefined,
   }));
 }
