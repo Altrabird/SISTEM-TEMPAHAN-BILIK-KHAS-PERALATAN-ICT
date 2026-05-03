@@ -1,8 +1,9 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, Plus, Info, Laptop, QrCode, Package, Lock, AlertTriangle, Pencil, Settings2 } from 'lucide-react';
+import { X, Plus, Info, Laptop, QrCode, Package, Lock, AlertTriangle, Pencil, Settings2, Printer, Loader2 } from 'lucide-react';
 import { Asset, Resource } from '../types';
 import { isAssetLocked, isResourceLocked, lockReasonOf } from '../lib/locks';
+import { openBulkQrSticker } from '../lib/qr';
 
 interface Props {
   open: boolean;
@@ -23,12 +24,22 @@ interface Props {
 export function AssetListModal({
   open, resourceId, assets, equipment, isAdmin, onClose, onPick, onAdd, onShowQR, onBulkLoan, onLockAsset, onEditAsset, onBulkActions,
 }: Props) {
+  const [printingBulkQr, setPrintingBulkQr] = useState(false);
+
   if (!resourceId) return null;
   const filtered = assets.filter((a) => a.resourceId === resourceId);
   const category = equipment.find((e) => e.id === resourceId);
   const eqName = category?.name ?? 'Peralatan';
   const categoryLocked = isResourceLocked(category);
   const categoryReason = lockReasonOf(category);
+
+  const handleBulkPrintQr = async () => {
+    if (printingBulkQr) return;
+    setPrintingBulkQr(true);
+    const r = await openBulkQrSticker(filtered, equipment);
+    setPrintingBulkQr(false);
+    if (!r.ok) alert(r.error ?? 'Gagal cetak.');
+  };
 
   return (
     <AnimatePresence>
@@ -54,7 +65,18 @@ export function AssetListModal({
                   Pilih unit spesifik untuk pinjaman
                 </p>
               </div>
-              <div className="flex gap-2 items-center">
+              <div className="flex gap-2 items-center flex-wrap justify-end">
+                {isAdmin && filtered.length > 0 && (
+                  <button
+                    onClick={handleBulkPrintQr}
+                    disabled={printingBulkQr}
+                    className="bg-slate-900 text-white px-4 py-2 rounded-lg text-[10px] font-bold uppercase tracking-widest hover:bg-slate-700 transition-all shadow-md flex items-center gap-2 disabled:opacity-60"
+                    title={`Cetak ${filtered.length} sticker QR untuk semua unit dalam kategori ini`}
+                  >
+                    {printingBulkQr ? <Loader2 size={13} className="animate-spin" /> : <Printer size={13} />}
+                    Cetak QR ({filtered.length})
+                  </button>
+                )}
                 {isAdmin && onBulkActions && (
                   <button
                     onClick={onBulkActions}
