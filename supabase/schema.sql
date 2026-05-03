@@ -160,3 +160,9 @@ insert into public.equipment (id, name, quantity) values
   ('eq-5', 'LCD',                 10),
   ('eq-6', 'Pencetak',             5)
 on conflict (id) do nothing;
+
+insert into public.assets (id, resource_id, name, serial_number, specifications, image_url, status) values
+  ('ast-1', 'eq-1', 'PC 01',     'SKBT-PC-2026-001', 'HP EliteDesk, Intel i5, 8GB RAM, 256GB SSD', 'https://images.unsplash.com/photo-1547082299-de196ea013d6?w=400&auto=format&fit=crop&q=60', 'available'),
+  ('ast-2', 'eq-1', 'PC 02',     'SKBT-PC-2026-002', 'HP EliteDesk, Intel i5, 8GB RAM, 256GB SSD', 'https://images.unsplash.com/photo-1547082299-de196ea013d6?w=400&auto=format&fit=crop&q=60', 'available'),
+  ('ast-3', 'eq-2', 'LAPTOP 01', 'SKBT-LP-2026-001', 'Dell Latitude, Intel i7, 16GB RAM, 512GB SSD', 'https://images.unsplash.com/photo-1496181133206-80ce9b88a853?w=400&auto=format&fit=crop&q=60', 'available')
+on conflict (id) do nothing;

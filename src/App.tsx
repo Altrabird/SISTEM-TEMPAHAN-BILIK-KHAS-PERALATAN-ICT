@@ -15,6 +15,7 @@ import {
   upsertResourceToCloud,
   fetchAssetsFromCloud,
   upsertAssetToCloud,
+  fetchBookingsFromCloud,
 } from './lib/storage';
 import { isAssetLocked, isResourceLocked, lockReasonOf } from './lib/locks';
 import { isSupabaseEnabled } from './lib/supabase';
@@ -37,6 +38,7 @@ import { LoanModal } from './components/LoanModal';
 import { BulkLoanModal } from './components/BulkLoanModal';
 import { QRCodeModal } from './components/QRCodeModal';
 import { LockAssetModal } from './components/LockAssetModal';
+import { EditAssetModal } from './components/EditAssetModal';
 
 type View = 'dashboard' | 'portfolio' | 'bookings' | 'rooms' | 'equipment' | 'admin' | 'reports' | 'settings';
 
@@ -66,6 +68,7 @@ export default function App() {
   const [qrAsset, setQrAsset] = useState<Asset | null>(null);
   const [pendingLoanId, setPendingLoanId] = useState<string | null>(null);
   const [lockingAsset, setLockingAsset] = useState<Asset | null>(null);
+  const [editingAsset, setEditingAsset] = useState<Asset | null>(null);
 
   useEffect(() => {
     setRooms(localStore.getRooms(INITIAL_ROOMS));
@@ -75,17 +78,20 @@ export default function App() {
     setProfile(localStore.getProfile());
     setProfileLoaded(true);
 
-    // Pull latest rooms + equipment + assets from Supabase so admin edits
-    // (image, description, lock status) propagate across devices.
+    // Supabase is the source of truth. Cloud results overwrite local cache
+    // (even when empty — we've seeded the canonical data via migrations).
+    // localStorage only serves as an offline fallback when Supabase is off.
     void (async () => {
-      const [cloudRooms, cloudEquipment, cloudAssets] = await Promise.all([
+      const [cloudRooms, cloudEquipment, cloudAssets, cloudBookings] = await Promise.all([
         fetchRoomsFromCloud(),
         fetchEquipmentFromCloud(),
         fetchAssetsFromCloud(),
+        fetchBookingsFromCloud(),
       ]);
-      if (cloudRooms && cloudRooms.length > 0) setRooms(cloudRooms);
-      if (cloudEquipment && cloudEquipment.length > 0) setEquipment(cloudEquipment);
-      if (cloudAssets && cloudAssets.length > 0) setAssets(cloudAssets);
+      if (cloudRooms !== null) setRooms(cloudRooms);
+      if (cloudEquipment !== null) setEquipment(cloudEquipment);
+      if (cloudAssets !== null) setAssets(cloudAssets);
+      if (cloudBookings !== null) setBookings(cloudBookings);
     })();
 
     // Parse ?loan=ast-X URL param (QR code deep-link entry).
@@ -634,6 +640,7 @@ export default function App() {
           setShowBulkLoanModal(true);
         }}
         onLockAsset={(asset) => setLockingAsset(asset)}
+        onEditAsset={(asset) => setEditingAsset(asset)}
       />
 
       <AddAssetModal
@@ -694,6 +701,14 @@ export default function App() {
         open={lockingAsset !== null}
         asset={lockingAsset}
         onClose={() => setLockingAsset(null)}
+        onSave={saveAsset}
+      />
+
+      <EditAssetModal
+        open={editingAsset !== null}
+        asset={editingAsset}
+        equipment={equipment}
+        onClose={() => setEditingAsset(null)}
         onSave={saveAsset}
       />
     </div>

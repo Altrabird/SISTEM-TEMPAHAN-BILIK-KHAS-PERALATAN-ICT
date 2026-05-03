@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, Plus, Info, Laptop, QrCode, Package, Lock, AlertTriangle } from 'lucide-react';
+import { X, Plus, Info, Laptop, QrCode, Package, Lock, AlertTriangle, Pencil } from 'lucide-react';
 import { Asset, Resource } from '../types';
 import { isAssetLocked, isResourceLocked, lockReasonOf } from '../lib/locks';
 
@@ -16,10 +16,11 @@ interface Props {
   onShowQR?: (asset: Asset) => void;
   onBulkLoan?: () => void;
   onLockAsset?: (asset: Asset) => void;
+  onEditAsset?: (asset: Asset) => void;
 }
 
 export function AssetListModal({
-  open, resourceId, assets, equipment, isAdmin, onClose, onPick, onAdd, onShowQR, onBulkLoan, onLockAsset,
+  open, resourceId, assets, equipment, isAdmin, onClose, onPick, onAdd, onShowQR, onBulkLoan, onLockAsset, onEditAsset,
 }: Props) {
   if (!resourceId) return null;
   const filtered = assets.filter((a) => a.resourceId === resourceId);
@@ -129,6 +130,15 @@ export function AssetListModal({
                         </span>
                       </div>
                       <div className="absolute top-3 right-3 flex gap-1">
+                        {isAdmin && onEditAsset && (
+                          <button
+                            onClick={() => onEditAsset(asset)}
+                            className="bg-blue-600/90 backdrop-blur p-1.5 rounded-md text-white hover:bg-blue-700 hover:scale-110 transition-all"
+                            title="Edit unit ini"
+                          >
+                            <Pencil size={13} />
+                          </button>
+                        )}
                         {isAdmin && onLockAsset && (
                           <button
                             onClick={() => onLockAsset(asset)}
