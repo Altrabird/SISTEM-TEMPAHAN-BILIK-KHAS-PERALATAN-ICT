@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, Plus, Info, Laptop, QrCode, Package, Lock, AlertTriangle, Pencil } from 'lucide-react';
+import { X, Plus, Info, Laptop, QrCode, Package, Lock, AlertTriangle, Pencil, Settings2 } from 'lucide-react';
 import { Asset, Resource } from '../types';
 import { isAssetLocked, isResourceLocked, lockReasonOf } from '../lib/locks';
 
@@ -17,10 +17,11 @@ interface Props {
   onBulkLoan?: () => void;
   onLockAsset?: (asset: Asset) => void;
   onEditAsset?: (asset: Asset) => void;
+  onBulkActions?: () => void;
 }
 
 export function AssetListModal({
-  open, resourceId, assets, equipment, isAdmin, onClose, onPick, onAdd, onShowQR, onBulkLoan, onLockAsset, onEditAsset,
+  open, resourceId, assets, equipment, isAdmin, onClose, onPick, onAdd, onShowQR, onBulkLoan, onLockAsset, onEditAsset, onBulkActions,
 }: Props) {
   if (!resourceId) return null;
   const filtered = assets.filter((a) => a.resourceId === resourceId);
@@ -54,6 +55,15 @@ export function AssetListModal({
                 </p>
               </div>
               <div className="flex gap-2 items-center">
+                {isAdmin && onBulkActions && (
+                  <button
+                    onClick={onBulkActions}
+                    className="bg-blue-600 text-white px-4 py-2 rounded-lg text-[10px] font-bold uppercase tracking-widest hover:bg-blue-700 transition-all shadow-md shadow-blue-500/20 flex items-center gap-2"
+                    title="Kunci/buka/padam banyak unit sekaligus"
+                  >
+                    <Settings2 size={13} /> Tindakan Pukal
+                  </button>
+                )}
                 {onBulkLoan && (
                   <button
                     onClick={onBulkLoan}

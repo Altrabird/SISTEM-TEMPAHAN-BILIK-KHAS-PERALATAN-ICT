@@ -14,6 +14,7 @@ interface Props {
   equipment: Resource[];
   onClose: () => void;
   onSave: (asset: Asset) => void;
+  onDelete?: (assetId: string) => void;
 }
 
 const STATUS_OPTIONS: { value: Asset['status']; label: string; tone: string }[] = [
@@ -22,7 +23,7 @@ const STATUS_OPTIONS: { value: Asset['status']; label: string; tone: string }[] 
   { value: 'maintenance', label: 'Dalam Penyelenggaraan', tone: 'bg-rose-50 text-rose-700 border-rose-200' },
 ];
 
-export function EditAssetModal({ open, asset, equipment, onClose, onSave }: Props) {
+export function EditAssetModal({ open, asset, equipment, onClose, onSave, onDelete }: Props) {
   const [draft, setDraft] = useState<Asset | null>(asset);
   const [savedFlash, setSavedFlash] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -306,6 +307,23 @@ export function EditAssetModal({ open, asset, equipment, onClose, onSave }: Prop
                   Batal
                 </button>
               </div>
+
+              {onDelete && (
+                <div className="pt-3 mt-3 border-t border-slate-100">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (confirm(`PADAM unit ini secara KEKAL?\n\n${draft.name} (${draft.serialNumber})\n\nTindakan ini tidak boleh dipulihkan. Rekod tempahan lama akan kekal sebagai sejarah.`)) {
+                        onDelete(draft.id);
+                        onClose();
+                      }
+                    }}
+                    className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-xs font-bold uppercase tracking-widest text-rose-600 border border-rose-200 hover:bg-rose-50 transition-all"
+                  >
+                    <Trash2 size={13} /> Padam Unit Ini
+                  </button>
+                </div>
+              )}
 
               <p className="text-[10px] text-slate-400 text-center pt-1">
                 Disimpan ke Supabase — perubahan disegerakkan ke semua peranti.

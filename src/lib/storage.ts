@@ -210,6 +210,15 @@ export async function upsertAssetToCloud(asset: Asset): Promise<{ ok: boolean; e
   return { ok: true };
 }
 
+export async function deleteAssetFromCloud(assetId: string): Promise<{ ok: boolean; error?: string }> {
+  if (!isSupabaseEnabled || !supabase) {
+    return { ok: false, error: 'Supabase belum dikonfig.' };
+  }
+  const { error } = await supabase.from('assets').delete().eq('id', assetId);
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
+}
+
 export async function syncProfileToCloud(profile: Profile): Promise<{ ok: boolean; error?: string }> {
   if (!isSupabaseEnabled || !supabase) {
     return { ok: false, error: 'Supabase not configured' };

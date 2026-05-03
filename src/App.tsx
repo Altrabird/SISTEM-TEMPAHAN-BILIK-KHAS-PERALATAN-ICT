@@ -15,6 +15,7 @@ import {
   upsertResourceToCloud,
   fetchAssetsFromCloud,
   upsertAssetToCloud,
+  deleteAssetFromCloud,
   fetchBookingsFromCloud,
 } from './lib/storage';
 import { isAssetLocked, isResourceLocked, lockReasonOf } from './lib/locks';
@@ -39,6 +40,7 @@ import { BulkLoanModal } from './components/BulkLoanModal';
 import { QRCodeModal } from './components/QRCodeModal';
 import { LockAssetModal } from './components/LockAssetModal';
 import { EditAssetModal } from './components/EditAssetModal';
+import { BulkAssetActionsModal, BulkAction } from './components/BulkAssetActionsModal';
 
 type View = 'dashboard' | 'portfolio' | 'bookings' | 'rooms' | 'equipment' | 'admin' | 'reports' | 'settings';
 
@@ -69,6 +71,7 @@ export default function App() {
   const [pendingLoanId, setPendingLoanId] = useState<string | null>(null);
   const [lockingAsset, setLockingAsset] = useState<Asset | null>(null);
   const [editingAsset, setEditingAsset] = useState<Asset | null>(null);
+  const [showBulkAssetActions, setShowBulkAssetActions] = useState(false);
 
   useEffect(() => {
     setRooms(localStore.getRooms(INITIAL_ROOMS));
@@ -297,6 +300,43 @@ export default function App() {
       return exists ? prev.map((x) => (x.id === a.id ? a : x)) : [...prev, a];
     });
     void upsertAssetToCloud(a);
+  };
+
+  const deleteAsset = (assetId: string) => {
+    setAssets((prev) => prev.filter((a) => a.id !== assetId));
+    void deleteAssetFromCloud(assetId);
+  };
+
+  const applyBulkAssetAction = async (
+    action: BulkAction,
+    targets: Asset[],
+  ): Promise<{ ok: number; failed: number }> => {
+    let ok = 0;
+    let failed = 0;
+    for (const a of targets) {
+      try {
+        if (action.kind === 'delete') {
+          const r = await deleteAssetFromCloud(a.id);
+          if (r.ok) {
+            setAssets((prev) => prev.filter((x) => x.id !== a.id));
+            ok += 1;
+          } else failed += 1;
+        } else {
+          let updated: Asset = a;
+          if (action.kind === 'lock') updated = { ...a, lockedReason: action.reason };
+          else if (action.kind === 'unlock') updated = { ...a, lockedReason: undefined };
+          else if (action.kind === 'status') updated = { ...a, status: action.status };
+          const r = await upsertAssetToCloud(updated);
+          if (r.ok) {
+            setAssets((prev) => prev.map((x) => (x.id === a.id ? updated : x)));
+            ok += 1;
+          } else failed += 1;
+        }
+      } catch {
+        failed += 1;
+      }
+    }
+    return { ok, failed };
   };
 
   const openBookingModal = (initial: Partial<Booking> = {}) => {
@@ -641,6 +681,10 @@ export default function App() {
         }}
         onLockAsset={(asset) => setLockingAsset(asset)}
         onEditAsset={(asset) => setEditingAsset(asset)}
+        onBulkActions={() => {
+          setShowAssetList(false);
+          setShowBulkAssetActions(true);
+        }}
       />
 
       <AddAssetModal
@@ -710,6 +754,16 @@ export default function App() {
         equipment={equipment}
         onClose={() => setEditingAsset(null)}
         onSave={saveAsset}
+        onDelete={deleteAsset}
+      />
+
+      <BulkAssetActionsModal
+        open={showBulkAssetActions}
+        resourceId={selectedResourceId}
+        assets={assets}
+        equipment={equipment}
+        onClose={() => setShowBulkAssetActions(false)}
+        onApply={applyBulkAssetAction}
       />
     </div>
   );
