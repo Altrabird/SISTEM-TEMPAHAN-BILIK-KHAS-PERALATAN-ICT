@@ -1,4 +1,4 @@
-# Deploy SKBT 2026 ke VPS
+# Deploy TEMPAH ke VPS
 
 Panduan one-time setup + deploy berulang untuk `tempah.altrabird.click`.
 
