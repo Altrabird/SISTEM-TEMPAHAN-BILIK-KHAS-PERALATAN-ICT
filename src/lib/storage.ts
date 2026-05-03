@@ -134,6 +134,20 @@ function rowToResource(row: any, type: 'room' | 'equipment'): Resource {
     imageUrl: row.image_url ?? undefined,
     capacity: row.capacity ?? undefined,
     quantity: row.quantity ?? undefined,
+    lockedReason: row.locked_reason ?? undefined,
+  };
+}
+
+function rowToAsset(row: any): Asset {
+  return {
+    id: row.id,
+    resourceId: row.resource_id,
+    name: row.name,
+    serialNumber: row.serial_number,
+    specifications: row.specifications ?? '',
+    imageUrl: row.image_url ?? undefined,
+    status: row.status ?? 'available',
+    lockedReason: row.locked_reason ?? undefined,
   };
 }
 
@@ -161,11 +175,37 @@ export async function upsertResourceToCloud(resource: Resource): Promise<{ ok: b
     name: resource.name,
     description: resource.description ?? null,
     image_url: resource.imageUrl ?? null,
+    locked_reason: resource.lockedReason ?? null,
   };
   if (resource.type === 'room') row.capacity = resource.capacity ?? null;
   else row.quantity = resource.quantity ?? null;
 
   const { error } = await supabase.from(table).upsert(row);
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
+}
+
+export async function fetchAssetsFromCloud(): Promise<Asset[] | null> {
+  if (!isSupabaseEnabled || !supabase) return null;
+  const { data, error } = await supabase.from('assets').select('*').order('name');
+  if (error || !data) return null;
+  return data.map(rowToAsset);
+}
+
+export async function upsertAssetToCloud(asset: Asset): Promise<{ ok: boolean; error?: string }> {
+  if (!isSupabaseEnabled || !supabase) {
+    return { ok: false, error: 'Supabase belum dikonfig.' };
+  }
+  const { error } = await supabase.from('assets').upsert({
+    id: asset.id,
+    resource_id: asset.resourceId,
+    name: asset.name,
+    serial_number: asset.serialNumber,
+    specifications: asset.specifications,
+    image_url: asset.imageUrl ?? null,
+    status: asset.status,
+    locked_reason: asset.lockedReason ?? null,
+  });
   if (error) return { ok: false, error: error.message };
   return { ok: true };
 }

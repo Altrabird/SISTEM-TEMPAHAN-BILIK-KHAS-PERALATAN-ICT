@@ -26,9 +26,11 @@ create table if not exists public.rooms (
   name text not null,
   description text,
   image_url text,
+  locked_reason text,
   capacity integer
 );
 alter table public.rooms add column if not exists image_url text;
+alter table public.rooms add column if not exists locked_reason text;
 
 -- =========================================================================
 -- 3. EQUIPMENT
@@ -38,9 +40,11 @@ create table if not exists public.equipment (
   name text not null,
   description text,
   image_url text,
+  locked_reason text,
   quantity integer
 );
 alter table public.equipment add column if not exists image_url text;
+alter table public.equipment add column if not exists locked_reason text;
 
 -- =========================================================================
 -- 4. ASSETS (specific units of equipment)
@@ -52,9 +56,11 @@ create table if not exists public.assets (
   serial_number text not null,
   specifications text,
   image_url text,
+  locked_reason text,
   status text not null default 'available'
     check (status in ('available', 'borrowed', 'maintenance'))
 );
+alter table public.assets add column if not exists locked_reason text;
 
 create index if not exists assets_resource_id_idx on public.assets (resource_id);
 create index if not exists assets_status_idx on public.assets (status);

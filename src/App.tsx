@@ -13,7 +13,10 @@ import {
   fetchRoomsFromCloud,
   fetchEquipmentFromCloud,
   upsertResourceToCloud,
+  fetchAssetsFromCloud,
+  upsertAssetToCloud,
 } from './lib/storage';
+import { isAssetLocked, isResourceLocked, lockReasonOf } from './lib/locks';
 import { isSupabaseEnabled } from './lib/supabase';
 
 import { DashboardView } from './views/DashboardView';
@@ -33,6 +36,7 @@ import { EditResourceModal } from './components/EditResourceModal';
 import { LoanModal } from './components/LoanModal';
 import { BulkLoanModal } from './components/BulkLoanModal';
 import { QRCodeModal } from './components/QRCodeModal';
+import { LockAssetModal } from './components/LockAssetModal';
 
 type View = 'dashboard' | 'portfolio' | 'bookings' | 'rooms' | 'equipment' | 'admin' | 'reports' | 'settings';
 
@@ -61,6 +65,7 @@ export default function App() {
   const [showBulkLoanModal, setShowBulkLoanModal] = useState(false);
   const [qrAsset, setQrAsset] = useState<Asset | null>(null);
   const [pendingLoanId, setPendingLoanId] = useState<string | null>(null);
+  const [lockingAsset, setLockingAsset] = useState<Asset | null>(null);
 
   useEffect(() => {
     setRooms(localStore.getRooms(INITIAL_ROOMS));
@@ -70,15 +75,17 @@ export default function App() {
     setProfile(localStore.getProfile());
     setProfileLoaded(true);
 
-    // Pull latest rooms + equipment from Supabase so admin edits
-    // (image, description) propagate across devices.
+    // Pull latest rooms + equipment + assets from Supabase so admin edits
+    // (image, description, lock status) propagate across devices.
     void (async () => {
-      const [cloudRooms, cloudEquipment] = await Promise.all([
+      const [cloudRooms, cloudEquipment, cloudAssets] = await Promise.all([
         fetchRoomsFromCloud(),
         fetchEquipmentFromCloud(),
+        fetchAssetsFromCloud(),
       ]);
       if (cloudRooms && cloudRooms.length > 0) setRooms(cloudRooms);
       if (cloudEquipment && cloudEquipment.length > 0) setEquipment(cloudEquipment);
+      if (cloudAssets && cloudAssets.length > 0) setAssets(cloudAssets);
     })();
 
     // Parse ?loan=ast-X URL param (QR code deep-link entry).
@@ -155,6 +162,12 @@ export default function App() {
     });
 
   const submitBooking = (b: Omit<Booking, 'id' | 'createdAt'> & { purposeFinal: string }): string | null => {
+    // Lock check (room or equipment category)
+    const allRes = [...rooms, ...equipment];
+    const target = allRes.find((r) => r.id === b.resourceId);
+    if (target && isResourceLocked(target)) {
+      return `RALAT: ${target.name} sedang DIKUNCI oleh pentadbir. Sebab: ${lockReasonOf(target)}`;
+    }
     const conflict = checkConflict(b.resourceId, b.date, b.startTime, b.endTime);
     if (conflict) {
       return `RALAT: ${b.resourceType === 'room' ? 'Bilik' : 'Peralatan'} ini telah ditempah oleh ${conflict.userName} pada waktu tersebut (${conflict.startTime} - ${conflict.endTime}).`;
@@ -178,6 +191,14 @@ export default function App() {
     returnDate: string;
   }): string | null => {
     if (!profile) return 'Sila log masuk profil terlebih dahulu.';
+    // Lock checks
+    if (isAssetLocked(input.asset)) {
+      return `RALAT: ${input.asset.name} sedang DIKUNCI. Sebab: ${lockReasonOf(input.asset)}`;
+    }
+    const category = equipment.find((e) => e.id === input.asset.resourceId);
+    if (category && isResourceLocked(category)) {
+      return `RALAT: Kategori ${category.name} sedang DIKUNCI. Sebab: ${lockReasonOf(category)}`;
+    }
     const conflict = checkLoanConflict(input.asset.id, input.startDate, input.returnDate);
     if (conflict) {
       return `RALAT: ${input.asset.name} sudah dipinjam oleh ${conflict.userName} dari ${conflict.date} hingga ${conflict.returnDate ?? conflict.date}.`;
@@ -209,6 +230,18 @@ export default function App() {
     returnDate: string;
   }): string | null => {
     if (!profile) return 'Sila log masuk profil terlebih dahulu.';
+    // Lock checks first (asset OR its category)
+    const lockedItems: string[] = [];
+    input.assets.forEach((a) => {
+      if (isAssetLocked(a)) lockedItems.push(a.name);
+      else {
+        const cat = equipment.find((e) => e.id === a.resourceId);
+        if (cat && isResourceLocked(cat)) lockedItems.push(`${a.name} [${cat.name}]`);
+      }
+    });
+    if (lockedItems.length > 0) {
+      return `RALAT: ${lockedItems.length} unit DIKUNCI: ${lockedItems.slice(0, 3).join(', ')}${lockedItems.length > 3 ? '...' : ''}`;
+    }
     const blocked: string[] = [];
     input.assets.forEach((a) => {
       const conflict = checkLoanConflict(a.id, input.startDate, input.returnDate);
@@ -250,6 +283,14 @@ export default function App() {
       setEquipment((prev) => prev.map((x) => (x.id === r.id ? r : x)));
     }
     void upsertResourceToCloud(r);
+  };
+
+  const saveAsset = (a: Asset) => {
+    setAssets((prev) => {
+      const exists = prev.some((x) => x.id === a.id);
+      return exists ? prev.map((x) => (x.id === a.id ? a : x)) : [...prev, a];
+    });
+    void upsertAssetToCloud(a);
   };
 
   const openBookingModal = (initial: Partial<Booking> = {}) => {
@@ -592,6 +633,7 @@ export default function App() {
           setShowAssetList(false);
           setShowBulkLoanModal(true);
         }}
+        onLockAsset={(asset) => setLockingAsset(asset)}
       />
 
       <AddAssetModal
@@ -599,7 +641,7 @@ export default function App() {
         initialResourceId={selectedResourceId}
         equipment={equipment}
         onClose={() => setShowAddAssetModal(false)}
-        onSubmit={(asset) => setAssets((prev) => [...prev, asset])}
+        onSubmit={saveAsset}
       />
 
       {profile && (
@@ -646,6 +688,13 @@ export default function App() {
         asset={qrAsset}
         category={qrAsset ? equipment.find((e) => e.id === qrAsset.resourceId) ?? null : null}
         onClose={() => setQrAsset(null)}
+      />
+
+      <LockAssetModal
+        open={lockingAsset !== null}
+        asset={lockingAsset}
+        onClose={() => setLockingAsset(null)}
+        onSave={saveAsset}
       />
     </div>
   );

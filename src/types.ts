@@ -22,6 +22,7 @@ export interface Asset {
   specifications: string;
   imageUrl?: string;
   status: 'available' | 'borrowed' | 'maintenance';
+  lockedReason?: string;
 }
 
 export interface Resource {
@@ -32,6 +33,7 @@ export interface Resource {
   imageUrl?: string;
   capacity?: number;
   quantity?: number;
+  lockedReason?: string;
 }
 
 export interface Booking {

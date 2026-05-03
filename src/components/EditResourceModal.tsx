@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
-  X, Save, DoorOpen, Laptop, Image as ImageIcon, Camera, Trash2, Loader2, AlertCircle
+  X, Save, DoorOpen, Laptop, Image as ImageIcon, Camera, Trash2, Loader2, AlertCircle, Lock, Unlock
 } from 'lucide-react';
 import { Resource } from '../types';
 import { uploadResourceImage } from '../lib/storage';
@@ -59,7 +59,14 @@ export function EditResourceModal({ open, resource, onClose, onSave }: Props) {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!draft.name.trim()) return;
-    onSave(draft);
+    // Normalise lockedReason: empty/whitespace = not locked
+    const cleaned: Resource = {
+      ...draft,
+      lockedReason: draft.lockedReason && draft.lockedReason.trim().length > 0
+        ? draft.lockedReason.trim()
+        : undefined,
+    };
+    onSave(cleaned);
     setSavedFlash(true);
     setTimeout(() => {
       setSavedFlash(false);
@@ -232,6 +239,66 @@ export function EditResourceModal({ open, resource, onClose, onSave }: Props) {
                     placeholder="0"
                   />
                 </Field>
+              </div>
+
+              {/* Lock controls */}
+              <div className={`rounded-xl border p-4 space-y-3 transition-colors ${
+                draft.lockedReason ? 'bg-amber-50 border-amber-200' : 'bg-slate-50 border-slate-200'
+              }`}>
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2 min-w-0">
+                    {draft.lockedReason ? (
+                      <Lock size={14} className="text-amber-600 shrink-0" />
+                    ) : (
+                      <Unlock size={14} className="text-slate-500 shrink-0" />
+                    )}
+                    <div className="min-w-0">
+                      <p className="text-xs font-bold text-slate-800">
+                        {draft.lockedReason ? 'Sumber Dikunci' : 'Sumber Terbuka'}
+                      </p>
+                      <p className="text-[10px] text-slate-500 leading-snug">
+                        {draft.lockedReason
+                          ? 'Pengguna tak boleh tempah / pinjam.'
+                          : `Pengguna boleh ${isRoom ? 'tempah bilik' : 'lihat senarai unit'} ini.`}
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setDraft({
+                      ...draft,
+                      lockedReason: draft.lockedReason ? undefined : '',
+                    })}
+                    className={`px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-widest transition-all shrink-0 ${
+                      draft.lockedReason
+                        ? 'bg-white border border-amber-300 text-amber-700 hover:bg-amber-100'
+                        : 'bg-slate-900 text-white hover:bg-slate-700'
+                    }`}
+                  >
+                    {draft.lockedReason ? 'Buka' : 'Kunci'}
+                  </button>
+                </div>
+
+                {draft.lockedReason !== undefined && (
+                  <div>
+                    <label className="text-[10px] font-bold uppercase tracking-widest text-amber-700 mb-1 block">
+                      Sebab / Penerangan untuk Pengguna *
+                    </label>
+                    <textarea
+                      value={draft.lockedReason ?? ''}
+                      onChange={(e) => setDraft({ ...draft, lockedReason: e.target.value })}
+                      rows={2}
+                      placeholder={isRoom
+                        ? 'Contoh: Ujian Online minggu ini (3-7 Mei). Sila guna Bilik Akses sahaja.'
+                        : 'Contoh: Sedang dipinjam pukal untuk Hari Sukan. Tersedia 12 Mei.'}
+                      className="w-full px-3 py-2 rounded-lg border border-amber-300 text-sm bg-white focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none transition-all"
+                      autoFocus
+                    />
+                    <p className="text-[10px] text-amber-700 mt-1 leading-snug">
+                      Mesej ini akan dipaparkan kepada pengguna pada kad sumber.
+                    </p>
+                  </div>
+                )}
               </div>
 
               <div className="flex items-center gap-3 pt-2">

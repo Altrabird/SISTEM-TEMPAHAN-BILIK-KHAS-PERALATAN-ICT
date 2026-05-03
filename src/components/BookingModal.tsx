@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { X, AlertCircle } from 'lucide-react';
 import { Booking, Resource, Profile } from '../types';
 import { PURPOSE_PRESETS } from '../constants';
+import { isResourceLocked } from '../lib/locks';
 
 interface Props {
   open: boolean;
@@ -151,10 +152,24 @@ export function BookingModal({ open, onClose, rooms, equipment, profile, initial
                 >
                   <option value="">Pilih Sumber</option>
                   <optgroup label="Bilik Khas">
-                    {rooms.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
+                    {rooms.map((r) => {
+                      const locked = isResourceLocked(r);
+                      return (
+                        <option key={r.id} value={r.id} disabled={locked}>
+                          {r.name}{locked ? ' — DIKUNCI' : ''}
+                        </option>
+                      );
+                    })}
                   </optgroup>
                   <optgroup label="Peralatan ICT">
-                    {equipment.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
+                    {equipment.map((r) => {
+                      const locked = isResourceLocked(r);
+                      return (
+                        <option key={r.id} value={r.id} disabled={locked}>
+                          {r.name}{locked ? ' — DIKUNCI' : ''}
+                        </option>
+                      );
+                    })}
                   </optgroup>
                 </select>
               </div>

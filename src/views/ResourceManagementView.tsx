@@ -1,7 +1,8 @@
 import React from 'react';
 import { motion } from 'motion/react';
-import { DoorOpen, Laptop, Plus, Pencil, Package } from 'lucide-react';
+import { DoorOpen, Laptop, Plus, Pencil, Package, Lock, AlertTriangle } from 'lucide-react';
 import { Resource, ResourceType } from '../types';
+import { isResourceLocked, lockReasonOf } from '../lib/locks';
 
 interface Props {
   resources: Resource[];
@@ -57,13 +58,20 @@ export function ResourceManagementView({ resources, title, type, onAction, onAdd
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-        {resources.map((r, i) => (
+        {resources.map((r, i) => {
+          const locked = isResourceLocked(r);
+          const reason = lockReasonOf(r);
+          return (
           <motion.div
             key={r.id}
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
             transition={{ delay: i * 0.04 }}
-            className="bg-white rounded-2xl border border-slate-200 shadow-sm group hover:border-blue-500 hover:shadow-md transition-all relative overflow-hidden flex flex-col"
+            className={`rounded-2xl border shadow-sm group transition-all relative overflow-hidden flex flex-col ${
+              locked
+                ? 'bg-amber-50/30 border-amber-200'
+                : 'bg-white border-slate-200 hover:border-blue-500 hover:shadow-md'
+            }`}
           >
             {/* Image / icon header */}
             <div className="relative h-36 bg-slate-100 overflow-hidden">
@@ -72,7 +80,9 @@ export function ResourceManagementView({ resources, title, type, onAction, onAdd
                   src={r.imageUrl}
                   alt={r.name}
                   referrerPolicy="no-referrer"
-                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                  className={`w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 ${
+                    locked ? 'grayscale opacity-60' : ''
+                  }`}
                 />
               ) : (
                 <div className={`w-full h-full flex items-center justify-center ${
@@ -81,6 +91,15 @@ export function ResourceManagementView({ resources, title, type, onAction, onAdd
                   {type === 'room' ? <DoorOpen size={56} /> : <Laptop size={56} />}
                 </div>
               )}
+
+              {locked && (
+                <div className="absolute inset-0 bg-amber-900/15 flex items-center justify-center">
+                  <div className="bg-amber-500 text-white rounded-full p-3.5 shadow-xl ring-4 ring-amber-100">
+                    <Lock size={22} />
+                  </div>
+                </div>
+              )}
+
               {/* Capacity badge top-right */}
               <div className="absolute top-3 right-3 bg-white/95 backdrop-blur px-2.5 py-1 rounded-md shadow-sm border border-white/40">
                 <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest leading-none">
@@ -98,7 +117,7 @@ export function ResourceManagementView({ resources, title, type, onAction, onAdd
                     onEdit(r);
                   }}
                   className="absolute top-3 left-3 bg-white/95 backdrop-blur p-1.5 rounded-md shadow-sm border border-white/40 text-slate-500 hover:text-blue-600 hover:bg-white transition-all"
-                  title="Edit"
+                  title="Edit (termasuk kunci)"
                 >
                   <Pencil size={12} />
                 </button>
@@ -107,14 +126,24 @@ export function ResourceManagementView({ resources, title, type, onAction, onAdd
 
             {/* Body */}
             <div className="p-5 flex-1 flex flex-col">
-              <h3 className="font-bold text-base text-slate-800 leading-snug tracking-tight group-hover:text-blue-600 transition-colors uppercase">
+              <h3 className={`font-bold text-base leading-snug tracking-tight transition-colors uppercase ${
+                locked ? 'text-slate-700' : 'text-slate-800 group-hover:text-blue-600'
+              }`}>
                 {r.name}
               </h3>
               <p className="text-[10px] font-bold text-slate-400 mt-1 uppercase tracking-widest">
                 {type === 'room' ? 'Inventori Bilik' : 'Inventori ICT'}
               </p>
 
-              {r.description ? (
+              {locked ? (
+                <div className="mt-3 p-3 bg-amber-50 border border-amber-200 rounded-lg flex-1">
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <AlertTriangle size={11} className="text-amber-600 shrink-0" />
+                    <p className="text-[9px] font-bold text-amber-700 uppercase tracking-widest">Sebab Dikunci</p>
+                  </div>
+                  <p className="text-[11px] text-amber-800 leading-relaxed">{reason}</p>
+                </div>
+              ) : r.description ? (
                 <p className="text-[12px] text-slate-600 mt-3 leading-relaxed line-clamp-3 flex-1">
                   {r.description}
                 </p>
@@ -128,19 +157,29 @@ export function ResourceManagementView({ resources, title, type, onAction, onAdd
 
               <div className="mt-4 pt-4 border-t border-slate-100 flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <div className="w-1.5 h-1.5 rounded-full bg-green-500" />
-                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Aktif</span>
+                  <div className={`w-1.5 h-1.5 rounded-full ${locked ? 'bg-amber-500' : 'bg-green-500'}`} />
+                  <span className={`text-[10px] font-bold uppercase tracking-widest ${
+                    locked ? 'text-amber-700' : 'text-slate-500'
+                  }`}>
+                    {locked ? 'Dikunci' : 'Aktif'}
+                  </span>
                 </div>
                 <button
+                  disabled={locked}
                   onClick={() => onAction(r.id)}
-                  className="bg-blue-600/10 text-blue-600 px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-widest hover:bg-blue-600 hover:text-white transition-all"
+                  className={`px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-widest transition-all ${
+                    locked
+                      ? 'bg-amber-100 text-amber-700 cursor-not-allowed'
+                      : 'bg-blue-600/10 text-blue-600 hover:bg-blue-600 hover:text-white'
+                  }`}
                 >
-                  {type === 'room' ? 'Tempah' : 'Pinjam'}
+                  {locked ? 'Dikunci' : (type === 'room' ? 'Tempah' : 'Pinjam')}
                 </button>
               </div>
             </div>
           </motion.div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );

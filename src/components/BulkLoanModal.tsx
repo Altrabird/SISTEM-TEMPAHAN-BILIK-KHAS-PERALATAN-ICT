@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { Asset, Profile, Resource } from '../types';
 import { PURPOSE_PRESETS } from '../constants';
+import { isAssetLocked, isResourceLocked } from '../lib/locks';
 
 interface Props {
   open: boolean;
@@ -68,7 +69,15 @@ export function BulkLoanModal({ open, assets, equipment, profile, onClose, onSub
     return preset ? addDaysISO(startDate, preset.days) : addDaysISO(startDate, 1);
   }, [period, customReturn, startDate]);
 
-  const available = useMemo(() => assets.filter((a) => a.status === 'available'), [assets]);
+  // Filter out locked assets and assets in locked categories from selection.
+  const available = useMemo(() => {
+    const lockedCategoryIds = new Set(equipment.filter(isResourceLocked).map((e) => e.id));
+    return assets.filter((a) =>
+      a.status === 'available' &&
+      !isAssetLocked(a) &&
+      !lockedCategoryIds.has(a.resourceId)
+    );
+  }, [assets, equipment]);
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     if (!q) return available;
