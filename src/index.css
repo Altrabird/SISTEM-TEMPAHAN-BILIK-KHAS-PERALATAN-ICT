@@ -36,6 +36,11 @@ body {
   background: #CCC;
 }
 
+/* Respect iOS home-indicator safe area when bottom-nav is fixed */
+.safe-area-bottom {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
 /* ========================================================================
    Print styles — applied only when the user prints (Cmd/Ctrl+P or Cetak).
    Strips chrome (sidebar, header, modals, action buttons) and presents a

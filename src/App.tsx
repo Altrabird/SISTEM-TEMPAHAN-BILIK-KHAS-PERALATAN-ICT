@@ -395,147 +395,175 @@ export default function App() {
     [bookings, profile],
   );
 
+  // Mobile bottom-nav items: 5 essentials reachable with thumb.
+  // Admin items live inside the drawer (hamburger).
+  const bottomNavItems = [
+    { id: 'dashboard' as View, label: 'Utama',     icon: LayoutDashboard },
+    { id: 'bookings'  as View, label: 'Tempahan',  icon: CalendarDays },
+    { id: 'rooms'     as View, label: 'Bilik',     icon: DoorOpen },
+    { id: 'equipment' as View, label: 'ICT',       icon: Laptop },
+    { id: 'portfolio' as View, label: 'Profil',    icon: UserCircle2 },
+  ];
+
+  const closeSidebar = () => setIsSidebarOpen(false);
+
   if (!profileLoaded) return null;
 
   return (
-    <div className="flex h-screen bg-[#f8fafc] text-[#1e293b] font-sans overflow-hidden">
+    <div className="flex h-screen bg-slate-50 text-slate-900 font-sans overflow-hidden">
       {!profile && <OnboardingModal onComplete={(p) => setProfile(p)} />}
 
-      <motion.aside
-        initial={false}
-        animate={{ width: isSidebarOpen ? 280 : 80 }}
-        className="app-sidebar bg-[#0f172a] text-slate-300 flex flex-col z-20 shrink-0"
+      {/* Mobile drawer backdrop */}
+      <AnimatePresence>
+        {isSidebarOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={closeSidebar}
+            className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-30 md:hidden"
+          />
+        )}
+      </AnimatePresence>
+
+      {/* Sidebar — drawer on mobile, fixed-width on desktop */}
+      <aside
+        className={`app-sidebar fixed md:static inset-y-0 left-0 z-40 w-72 md:w-[280px] shrink-0
+          flex flex-col text-white transform transition-transform duration-300 ease-out
+          ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
+          bg-gradient-to-b from-blue-700 via-blue-800 to-indigo-900 shadow-2xl md:shadow-none`}
       >
-        <div className="p-5 border-b border-slate-800">
-          <div className="flex items-start gap-3">
-            <div className="w-9 h-9 bg-blue-600 rounded-lg flex items-center justify-center shrink-0">
-              <CalendarDays className="text-white w-5 h-5" />
-            </div>
-            {isSidebarOpen && (
-              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex-1 min-w-0 pt-0.5">
-                <h1 className="text-[9px] font-bold uppercase tracking-[0.18em] text-blue-400 leading-tight">SK Bandar Tawau</h1>
-                <p className="text-[13px] font-bold text-white leading-snug mt-1">
-                  Sistem Tempahan Bilik Khas & Peralatan ICT
-                </p>
-              </motion.div>
-            )}
+        {/* Brand header */}
+        <div className="p-5 border-b border-white/10 flex items-start gap-3">
+          <div className="w-10 h-10 bg-white/15 backdrop-blur ring-1 ring-white/20 rounded-xl flex items-center justify-center shrink-0">
+            <CalendarDays className="text-white w-5 h-5" />
           </div>
+          <div className="flex-1 min-w-0 pt-0.5">
+            <h1 className="text-[9px] font-bold uppercase tracking-[0.18em] text-blue-200 leading-tight">SK Bandar Tawau</h1>
+            <p className="text-[13px] font-bold text-white leading-snug mt-1">
+              Sistem Tempahan Bilik Khas & Peralatan ICT
+            </p>
+          </div>
+          <button
+            onClick={closeSidebar}
+            className="md:hidden p-1.5 -mr-1 -mt-0.5 text-white/70 hover:text-white"
+            title="Tutup"
+          >
+            <X size={18} />
+          </button>
         </div>
 
-        <nav className="flex-1 px-4 py-6 space-y-1 overflow-y-auto">
-          {navItems.map((item) => (
-            <button
-              key={item.id}
-              onClick={() => setActiveView(item.id)}
-              className={`w-full flex items-center gap-4 px-4 py-3 rounded-lg transition-all duration-200 group ${
-                activeView === item.id
-                  ? 'bg-blue-600/10 text-blue-400 border border-blue-600/20 shadow-lg shadow-blue-500/5'
-                  : 'text-slate-400 hover:bg-slate-800 hover:text-white border border-transparent'
-              }`}
-            >
-              <item.icon className={`w-5 h-5 shrink-0 ${activeView === item.id ? 'text-blue-400' : 'text-slate-500 group-hover:text-slate-300'}`} />
-              {isSidebarOpen && (
-                <motion.span initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="font-medium text-sm flex-1 text-left">
-                  {item.label}
-                </motion.span>
-              )}
-              {isSidebarOpen && item.id === 'portfolio' && myBookingsCount > 0 && (
-                <span className="text-[9px] font-black bg-blue-500/20 text-blue-300 px-1.5 py-0.5 rounded">{myBookingsCount}</span>
-              )}
-            </button>
-          ))}
-
-          {isSidebarOpen && (
-            <div className="mt-6 px-4">
-              <p className="text-[10px] uppercase tracking-widest text-slate-500 font-bold mb-3">Pengurusan</p>
+        <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
+          {navItems.map((item) => {
+            const active = activeView === item.id;
+            return (
               <button
-                onClick={() => openBookingModal()}
-                className="w-full text-left text-xs font-medium text-slate-400 hover:text-white transition-colors flex items-center gap-2 group"
+                key={item.id}
+                onClick={() => { setActiveView(item.id); closeSidebar(); }}
+                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-150 ${
+                  active
+                    ? 'bg-white text-blue-700 shadow-md shadow-blue-900/30 font-bold'
+                    : 'text-blue-50/90 hover:bg-white/10 hover:text-white'
+                }`}
               >
-                <Plus size={14} className="text-slate-600 group-hover:text-blue-400" /> Tempahan Baru
+                <item.icon className={`w-5 h-5 shrink-0 ${active ? 'text-blue-700' : 'text-blue-200'}`} />
+                <span className="font-semibold text-sm flex-1 text-left">{item.label}</span>
+                {item.id === 'portfolio' && myBookingsCount > 0 && (
+                  <span className={`text-[9px] font-black px-1.5 py-0.5 rounded ${
+                    active ? 'bg-blue-100 text-blue-700' : 'bg-white/20 text-white'
+                  }`}>
+                    {myBookingsCount}
+                  </span>
+                )}
               </button>
-            </div>
-          )}
+            );
+          })}
+
+          <div className="mt-5 px-3">
+            <p className="text-[10px] uppercase tracking-widest text-blue-200/70 font-bold mb-2">Pengurusan</p>
+            <button
+              onClick={() => { openBookingModal(); closeSidebar(); }}
+              className="w-full bg-white/10 hover:bg-white/20 backdrop-blur border border-white/20 text-white px-3 py-2 rounded-lg text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 transition-all"
+            >
+              <Plus size={14} /> Tempahan Baru
+            </button>
+          </div>
         </nav>
 
-        <div className="p-4 bg-slate-900/50 border-t border-slate-800">
-          <div className="flex items-center gap-2 mb-2">
+        {/* Footer profile chip */}
+        <div className="p-3 bg-black/15 border-t border-white/10">
+          <div className="flex items-center gap-2">
             <button
-              onClick={() => setActiveView('portfolio')}
-              className="flex-1 flex items-center gap-3 px-2 py-1.5 rounded-lg hover:bg-slate-800 transition-colors text-left min-w-0"
+              onClick={() => { setActiveView('portfolio'); closeSidebar(); }}
+              className="flex-1 flex items-center gap-2.5 px-2 py-1.5 rounded-lg hover:bg-white/10 transition-colors text-left min-w-0"
               title="Lihat portfolio saya"
             >
               {profile?.avatarUrl ? (
-                <img src={profile.avatarUrl} alt={profile.name} referrerPolicy="no-referrer" className="w-8 h-8 rounded-full object-cover shrink-0" />
+                <img src={profile.avatarUrl} alt={profile.name} referrerPolicy="no-referrer" className="w-9 h-9 rounded-full object-cover ring-2 ring-white/30 shrink-0" />
               ) : (
-                <div className="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center text-xs font-bold text-slate-300 shrink-0">
+                <div className="w-9 h-9 rounded-full bg-white text-blue-700 flex items-center justify-center text-xs font-black ring-2 ring-white/30 shrink-0">
                   {initials}
                 </div>
               )}
-              {isSidebarOpen && (
-                <div className="overflow-hidden flex-1">
-                  <p className="text-xs font-bold text-white truncate">{profile?.name ?? 'Tetamu'}</p>
-                  <p className="text-[10px] text-slate-500 truncate">
-                    {profile ? (ROLE_LABELS[profile.role] ?? profile.role) : 'Belum ditetapkan'}
-                    {isSupabaseEnabled && <span className="ml-1.5 text-emerald-400">●</span>}
-                  </p>
-                </div>
-              )}
+              <div className="overflow-hidden flex-1">
+                <p className="text-xs font-bold text-white truncate">{profile?.name ?? 'Tetamu'}</p>
+                <p className="text-[10px] text-blue-200/80 truncate">
+                  {profile ? (ROLE_LABELS[profile.role] ?? profile.role) : 'Belum ditetapkan'}
+                  {isSupabaseEnabled && <span className="ml-1.5 text-emerald-300">●</span>}
+                </p>
+              </div>
             </button>
-            {profile && isSidebarOpen && (
+            {profile && (
               <button
                 onClick={switchProfile}
-                className="p-2 rounded-lg text-slate-500 hover:bg-slate-800 hover:text-rose-300 transition-colors shrink-0"
+                className="p-2 rounded-lg text-blue-200/80 hover:bg-white/10 hover:text-rose-300 transition-colors shrink-0"
                 title="Tukar profil"
               >
                 <LogOut size={14} />
               </button>
             )}
           </div>
-          {profile && !isSidebarOpen && (
-            <button
-              onClick={switchProfile}
-              className="w-full h-8 flex items-center justify-center hover:bg-slate-800 rounded-lg transition-colors text-slate-500 hover:text-rose-300 mb-1"
-              title="Tukar profil"
-            >
-              <LogOut size={14} />
-            </button>
-          )}
-          <button
-            onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-            className="w-full h-8 flex items-center justify-center hover:bg-slate-800 rounded-lg transition-colors text-slate-500 hover:text-slate-300"
-          >
-            {isSidebarOpen ? <X size={16} /> : <Menu size={16} />}
-          </button>
         </div>
-      </motion.aside>
+      </aside>
 
-      <main className="app-main flex-1 flex flex-col relative overflow-hidden">
-        <header className="app-header h-16 border-b border-slate-200 bg-white flex items-center justify-between px-8 z-10 shrink-0 shadow-sm shadow-slate-200/50">
-          <h2 className="text-xs font-bold uppercase tracking-widest text-slate-400">
-            {navItems.find((n) => n.id === activeView)?.label}
-          </h2>
-          <div className="flex items-center gap-6">
-            <div className="hidden md:flex items-center gap-4">
-              <div className="flex items-center gap-1.5">
-                <div className="w-2 h-2 rounded-full bg-green-500" />
-                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-tight">Tersedia</span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <div className="w-2 h-2 rounded-full bg-amber-500" />
-                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-tight">Ditempah</span>
-              </div>
-            </div>
+      <main className="app-main flex-1 flex flex-col relative overflow-hidden min-w-0">
+        {/* Header — vibrant blue on mobile (matches Hadir@SKBT), white on desktop */}
+        <header className="app-header z-10 shrink-0 bg-gradient-to-r from-blue-600 to-indigo-700 md:bg-white md:bg-none border-b border-blue-800/20 md:border-slate-200 shadow-sm">
+          <div className="flex items-center justify-between px-4 md:px-8 h-14 md:h-16 gap-3">
             <button
-              onClick={() => openBookingModal()}
-              className="bg-blue-600 text-white px-5 py-2 rounded-lg text-xs font-bold uppercase tracking-wide flex items-center gap-2 hover:bg-blue-700 transition-all shadow-md shadow-blue-500/20 active:scale-95"
+              onClick={() => setIsSidebarOpen(true)}
+              className="md:hidden p-2 -ml-2 text-white hover:bg-white/10 rounded-lg transition-colors"
+              title="Menu"
             >
-              <Plus size={16} /> Tempahan Baru
+              <Menu size={20} />
             </button>
+            <h2 className="text-sm md:text-xs font-bold md:uppercase tracking-tight md:tracking-widest text-white md:text-slate-400 flex-1 truncate">
+              {navItems.find((n) => n.id === activeView)?.label ?? 'TEMPAH'}
+            </h2>
+            <div className="flex items-center gap-3">
+              <div className="hidden md:flex items-center gap-4 mr-2">
+                <div className="flex items-center gap-1.5">
+                  <div className="w-2 h-2 rounded-full bg-green-500" />
+                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-tight">Tersedia</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <div className="w-2 h-2 rounded-full bg-amber-500" />
+                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-tight">Ditempah</span>
+                </div>
+              </div>
+              <button
+                onClick={() => openBookingModal()}
+                className="bg-white md:bg-blue-600 text-blue-700 md:text-white px-3 md:px-5 py-2 rounded-lg text-xs font-bold uppercase tracking-wide flex items-center gap-1.5 md:gap-2 hover:bg-blue-50 md:hover:bg-blue-700 transition-all shadow-sm md:shadow-md md:shadow-blue-500/20 active:scale-95"
+              >
+                <Plus size={16} />
+                <span className="hidden sm:inline">Tempahan Baru</span>
+                <span className="sm:hidden">Baru</span>
+              </button>
+            </div>
           </div>
         </header>
 
-        <div className="app-content flex-1 overflow-y-auto p-8 bg-[#f8fafc]">
+        <div className="app-content flex-1 overflow-y-auto p-4 md:p-8 pb-24 md:pb-8 bg-slate-50">
           <AnimatePresence mode="wait">
             <motion.div
               key={activeView}
@@ -824,6 +852,36 @@ export default function App() {
           setReturningLoan(null);
         }}
       />
+
+      {/* Mobile bottom navigation — only visible < md */}
+      {profile && (
+        <nav className="md:hidden fixed bottom-0 inset-x-0 z-30 bg-white border-t border-slate-200 shadow-[0_-4px_20px_-4px_rgba(0,0,0,0.08)] safe-area-bottom">
+          <div className="grid grid-cols-5">
+            {bottomNavItems.map((item) => {
+              const active = activeView === item.id;
+              return (
+                <button
+                  key={item.id}
+                  onClick={() => setActiveView(item.id)}
+                  className={`flex flex-col items-center justify-center gap-0.5 py-2.5 transition-colors ${
+                    active ? 'text-blue-600' : 'text-slate-400 hover:text-slate-600'
+                  }`}
+                >
+                  <div className={`relative ${active ? 'scale-110' : ''} transition-transform`}>
+                    <item.icon size={20} />
+                    {active && (
+                      <div className="absolute -top-2.5 left-1/2 -translate-x-1/2 w-8 h-1 bg-blue-600 rounded-full" />
+                    )}
+                  </div>
+                  <span className={`text-[10px] font-bold uppercase tracking-wide ${active ? 'text-blue-600' : ''}`}>
+                    {item.label}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </nav>
+      )}
     </div>
   );
 }
