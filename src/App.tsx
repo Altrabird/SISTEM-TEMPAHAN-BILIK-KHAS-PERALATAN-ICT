@@ -44,6 +44,7 @@ import { LockAssetModal } from './components/LockAssetModal';
 import { EditAssetModal } from './components/EditAssetModal';
 import { BulkAssetActionsModal, BulkAction } from './components/BulkAssetActionsModal';
 import { ReturnLoanModal } from './components/ReturnLoanModal';
+import { PWAUpdatePrompt } from './components/PWAUpdatePrompt';
 
 type View = 'dashboard' | 'portfolio' | 'bookings' | 'rooms' | 'equipment' | 'admin' | 'reports' | 'loans' | 'settings';
 
@@ -852,6 +853,8 @@ export default function App() {
           setReturningLoan(null);
         }}
       />
+
+      <PWAUpdatePrompt />
 
       {/* Mobile bottom navigation — only visible < md */}
       {profile && (
