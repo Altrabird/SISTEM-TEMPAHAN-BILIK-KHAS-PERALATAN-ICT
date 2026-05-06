@@ -602,6 +602,10 @@ export default function App() {
                   equipment={equipment}
                   profile={profile}
                   onCancel={cancelBooking}
+                  onReturn={(booking) => {
+                    const asset = assets.find((a) => a.id === booking.resourceId) ?? null;
+                    setReturningLoan({ booking, asset });
+                  }}
                 />
               )}
               {activeView === 'rooms' && (

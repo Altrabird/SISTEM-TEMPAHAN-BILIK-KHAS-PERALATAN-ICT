@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { CalendarDays, Clock, Search, Filter, Trash2, Download, Printer } from 'lucide-react';
+import { CalendarDays, Clock, Search, Filter, Trash2, Download, Printer, PackageCheck } from 'lucide-react';
 import { Booking, Resource, Profile } from '../types';
 
 interface Props {
@@ -8,9 +8,10 @@ interface Props {
   equipment: Resource[];
   profile: Profile | null;
   onCancel: (id: string) => void;
+  onReturn?: (booking: Booking) => void;
 }
 
-export function BookingsView({ bookings, rooms, equipment, profile, onCancel }: Props) {
+export function BookingsView({ bookings, rooms, equipment, profile, onCancel, onReturn }: Props) {
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<'all' | 'mine' | 'upcoming'>('all');
 
@@ -262,13 +263,22 @@ export function BookingsView({ bookings, rooms, equipment, profile, onCancel }: 
                 </p>
               )}
 
-              <div className="flex items-center justify-end gap-1 pt-2 border-t border-slate-100">
+              <div className="flex items-center justify-end gap-1 pt-2 border-t border-slate-100 flex-wrap">
                 <button
                   onClick={() => printSingle(b)}
                   className="px-2.5 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-widest text-slate-600 hover:bg-blue-50 hover:text-blue-600 transition-colors flex items-center gap-1"
                 >
                   <Printer size={11} /> Slip
                 </button>
+                {b.status === 'confirmed' && b.resourceType === 'equipment' && profile && b.userId === profile.id && onReturn && (
+                  <button
+                    onClick={() => onReturn(b)}
+                    className="px-2.5 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-widest text-emerald-600 hover:bg-emerald-50 transition-colors flex items-center gap-1"
+                    title="Tanda alat ini sudah dipulangkan"
+                  >
+                    <PackageCheck size={11} /> Pulangkan
+                  </button>
+                )}
                 {b.status === 'confirmed' && profile && b.userId === profile.id && (
                   <button
                     onClick={() => {
@@ -357,6 +367,15 @@ export function BookingsView({ bookings, rooms, equipment, profile, onCancel }: 
                     >
                       <Printer size={14} />
                     </button>
+                    {b.status === 'confirmed' && b.resourceType === 'equipment' && profile && b.userId === profile.id && onReturn && (
+                      <button
+                        onClick={() => onReturn(b)}
+                        className="p-1.5 rounded-lg text-slate-400 hover:bg-emerald-50 hover:text-emerald-600 transition-colors"
+                        title="Tanda alat ini sudah dipulangkan"
+                      >
+                        <PackageCheck size={14} />
+                      </button>
+                    )}
                     {b.status === 'confirmed' && profile && b.userId === profile.id && (
                       <button
                         onClick={() => {
