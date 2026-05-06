@@ -27,6 +27,19 @@ untuk SKBT**. Sila ikut path ini bulat-bulat:
 - ❌ `systemctl restart nginx` (boleh down semua site sekejap)
   → guna `systemctl reload nginx` SAHAJA (graceful, tidak down site lain)
 
+### ⚠️ Selepas Certbot — JANGAN copy nginx.conf semula
+
+Lepas Certbot setup HTTPS, ia ubah `/etc/nginx/sites-available/tempah.altrabird.click`
+dengan tambah HTTPS server block. Kalau anda copy `deploy/nginx.conf` (versi HTTP-only)
+semula, HTTPS akan **HILANG** dan request akan jatuh ke server default (site lain).
+
+**Kalau dah berlaku** — pulihkan dengan:
+```bash
+certbot --nginx -d tempah.altrabird.click
+```
+
+Pilih **2 (Redirect)** bila ditanya. Selesai.
+
 **Sebelum mula, audit dulu apa yang sudah ada:**
 ```bash
 ls /etc/nginx/sites-enabled/                  # senarai site lain

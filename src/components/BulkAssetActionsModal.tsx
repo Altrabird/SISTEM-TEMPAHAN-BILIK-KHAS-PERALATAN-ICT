@@ -173,7 +173,7 @@ export function BulkAssetActionsModal({ open, resourceId, assets, equipment, onC
             initial={{ opacity: 0, scale: 0.95, y: 20 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 20 }}
-            className="bg-white rounded-2xl w-full max-w-2xl shadow-2xl border border-slate-200 max-h-[92vh] flex flex-col"
+            className="relative bg-white rounded-2xl w-full max-w-2xl shadow-2xl border border-slate-200 max-h-[92vh] flex flex-col"
           >
             {/* Header */}
             <div className="p-6 border-b border-slate-200 flex items-center justify-between shrink-0">

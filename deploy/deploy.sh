@@ -6,6 +6,10 @@
 # - This script ONLY touches paths that contain "/tempah/" by design.
 # - It NEVER restarts nginx (could affect other sites). Only reloads.
 # - It NEVER deletes anything outside /var/www/tempah/releases/.
+# - It NEVER overwrites /etc/nginx/sites-* — Certbot's HTTPS setup is
+#   appended to the live config, so overwriting from the repo would
+#   wipe HTTPS. If you need to change nginx behaviour, edit the live
+#   file in place or copy + re-run `certbot --nginx -d <domain>`.
 # - Other apps on this VPS are not touched.
 #
 # Run on the VPS after the initial setup:
