@@ -8,6 +8,7 @@ import {
 import { Booking, Resource, Profile, Achievement } from '../types';
 import { ACHIEVEMENTS, ROLE_LABELS } from '../constants';
 import { computePortfolioStats } from '../lib/achievements';
+import { todayLocalISO } from '../lib/dates';
 
 const ICONS: Record<string, React.ComponentType<{ size?: number; className?: string }>> = {
   Sparkles, Star, Award, Medal, Trophy, Sunrise, Moon, Flame, Zap,
@@ -58,7 +59,7 @@ export function PortfolioView({ profile, bookings, rooms, equipment, onEditProfi
   );
 
   const allResources = useMemo(() => [...rooms, ...equipment], [rooms, equipment]);
-  const today = new Date().toISOString().split('T')[0];
+  const today = todayLocalISO();
   const myBookings = useMemo(
     () => bookings.filter((b) => b.userId === profile.id && b.status !== 'cancelled'),
     [bookings, profile.id],

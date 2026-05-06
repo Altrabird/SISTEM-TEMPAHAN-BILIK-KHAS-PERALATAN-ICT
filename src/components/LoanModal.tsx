@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { X, AlertCircle, Laptop, Sparkles, Calendar, ScanLine } from 'lucide-react';
 import { Asset, Booking, Profile, Resource } from '../types';
 import { PURPOSE_PRESETS } from '../constants';
+import { todayLocalISO, addDaysLocalISO, daysBetween } from '../lib/dates';
 
 interface Props {
   open: boolean;
@@ -28,15 +29,9 @@ const PERIOD_PRESETS: { id: string; label: string; days: number }[] = [
   { id: 'custom', label: 'Pilih Tarikh', days: 0 },
 ];
 
-function todayISO(): string {
-  return new Date().toISOString().split('T')[0];
-}
-
-function addDaysISO(base: string, days: number): string {
-  const d = new Date(base + 'T00:00:00');
-  d.setDate(d.getDate() + days);
-  return d.toISOString().split('T')[0];
-}
+// Date helpers are imported from ../lib/dates and are local-timezone safe.
+const todayISO = todayLocalISO;
+const addDaysISO = addDaysLocalISO;
 
 export function LoanModal({ open, asset, category, profile, fromQr, onClose, onSubmit }: Props) {
   const [purposeCategory, setPurposeCategory] = useState('PdPc');
@@ -91,7 +86,10 @@ export function LoanModal({ open, asset, category, profile, fromQr, onClose, onS
 
   if (!asset) return null;
 
-  const totalDays = Math.max(1, Math.round((new Date(returnDate).getTime() - new Date(startDate).getTime()) / 86400000) + 1);
+  // "1 hari" preset = today + 1 day (return tomorrow). Display the gap
+  // between dates without an off-by-one shift so the preset label and
+  // the badge match.
+  const totalDays = Math.max(1, daysBetween(startDate, returnDate));
 
   return (
     <AnimatePresence>

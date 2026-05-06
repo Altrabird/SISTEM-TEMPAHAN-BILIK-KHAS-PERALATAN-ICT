@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { X, PackageCheck, Calendar, Clock, AlertTriangle } from 'lucide-react';
 import { Asset, Booking, Profile, Resource } from '../types';
+import { todayLocalISO } from '../lib/dates';
 
 interface Props {
   open: boolean;
@@ -31,7 +32,7 @@ export function ReturnLoanModal({ open, booking, asset, category, admin, onClose
   if (!booking) return null;
 
   const expectedReturn = booking.returnDate ?? booking.date;
-  const today = new Date().toISOString().split('T')[0];
+  const today = todayLocalISO();
   const overdue = today > expectedReturn;
   const overdueDays = overdue
     ? Math.ceil((new Date(today).getTime() - new Date(expectedReturn).getTime()) / 86400000)

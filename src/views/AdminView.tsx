@@ -9,6 +9,7 @@ import { ROLE_LABELS, ACHIEVEMENTS } from '../constants';
 import { computePortfolioStats } from '../lib/achievements';
 import { fetchProfilesFromCloud, fetchBookingsFromCloud } from '../lib/storage';
 import { isSupabaseEnabled } from '../lib/supabase';
+import { todayLocalISO } from '../lib/dates';
 import { PortfolioView } from './PortfolioView';
 
 interface Props {
@@ -91,7 +92,7 @@ export function AdminView({ rooms, equipment, localBookings }: Props) {
 
   const schoolStats = useMemo(() => {
     const now = new Date();
-    const todayISO = now.toISOString().split('T')[0];
+    const todayISO = todayLocalISO();
     const monthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
     const active = bookings.filter((b) => b.status !== 'cancelled');
 

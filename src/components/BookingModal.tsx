@@ -4,6 +4,7 @@ import { X, AlertCircle } from 'lucide-react';
 import { Booking, Resource, Profile } from '../types';
 import { PURPOSE_PRESETS } from '../constants';
 import { isResourceLocked } from '../lib/locks';
+import { todayLocalISO } from '../lib/dates';
 
 interface Props {
   open: boolean;
@@ -24,7 +25,7 @@ export function BookingModal({ open, onClose, rooms, equipment, profile, initial
   React.useEffect(() => {
     if (open) {
       setDraft({
-        date: new Date().toISOString().split('T')[0],
+        date: todayLocalISO(),
         startTime: '08:00',
         endTime: '09:00',
         userName: profile?.name ?? '',

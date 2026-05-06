@@ -4,6 +4,7 @@ import {
   DoorOpen, Laptop, Clock, CheckCircle2, Info, AlertCircle, TrendingUp, CalendarDays
 } from 'lucide-react';
 import { Booking, Resource, Profile } from '../types';
+import { todayLocalISO } from '../lib/dates';
 
 interface Props {
   bookings: Booking[];
@@ -14,7 +15,7 @@ interface Props {
 }
 
 export function DashboardView({ bookings, rooms, equipment, profile, onOpenPortfolio }: Props) {
-  const today = new Date().toISOString().split('T')[0];
+  const today = todayLocalISO();
   const todayBookings = bookings.filter((b) => b.date === today && b.status !== 'cancelled');
   const myBookings = profile ? bookings.filter((b) => b.userId === profile.id && b.status !== 'cancelled') : [];
 

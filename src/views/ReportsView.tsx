@@ -9,6 +9,7 @@ import { ROLE_LABELS, ACHIEVEMENTS } from '../constants';
 import { computePortfolioStats } from '../lib/achievements';
 import { fetchProfilesFromCloud, fetchBookingsFromCloud } from '../lib/storage';
 import { isSupabaseEnabled } from '../lib/supabase';
+import { todayLocalISO } from '../lib/dates';
 
 interface Props {
   rooms: Resource[];
@@ -47,7 +48,7 @@ export function ReportsView({ rooms, equipment, localBookings }: Props) {
 
   const allResources = useMemo(() => [...rooms, ...equipment], [rooms, equipment]);
   const today = new Date();
-  const todayISO = today.toISOString().split('T')[0];
+  const todayISO = todayLocalISO();
   const monthKey = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
   const thisMonthKey = monthKey(today);
   const thisYearKey = String(today.getFullYear());

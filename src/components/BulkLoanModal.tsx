@@ -7,6 +7,7 @@ import {
 import { Asset, Profile, Resource } from '../types';
 import { PURPOSE_PRESETS } from '../constants';
 import { isAssetLocked, isResourceLocked } from '../lib/locks';
+import { todayLocalISO, addDaysLocalISO, daysBetween } from '../lib/dates';
 
 interface Props {
   open: boolean;
@@ -30,14 +31,9 @@ const PERIOD_PRESETS: { id: string; label: string; days: number }[] = [
   { id: 'custom', label: 'Pilih', days: 0 },
 ];
 
-function todayISO(): string {
-  return new Date().toISOString().split('T')[0];
-}
-function addDaysISO(base: string, days: number): string {
-  const d = new Date(base + 'T00:00:00');
-  d.setDate(d.getDate() + days);
-  return d.toISOString().split('T')[0];
-}
+// Date helpers from ../lib/dates are local-timezone safe.
+const todayISO = todayLocalISO;
+const addDaysISO = addDaysLocalISO;
 
 export function BulkLoanModal({ open, assets, equipment, profile, onClose, onSubmit }: Props) {
   const [step, setStep] = useState<'select' | 'form'>('select');
@@ -159,7 +155,7 @@ export function BulkLoanModal({ open, assets, equipment, profile, onClose, onSub
     }
   };
 
-  const totalDays = Math.max(1, Math.round((new Date(returnDate).getTime() - new Date(startDate).getTime()) / 86400000) + 1);
+  const totalDays = Math.max(1, daysBetween(startDate, returnDate));
 
   return (
     <AnimatePresence>

@@ -1,4 +1,5 @@
 import { Booking, AchievementId, PortfolioStats, Resource } from '../types';
+import { formatLocalISO } from './dates';
 
 function startOfWeek(d: Date): Date {
   const x = new Date(d);
@@ -18,7 +19,7 @@ export function computePortfolioStats(
 ): PortfolioStats {
   const mine = bookings.filter((b) => b.userId === userId && b.status !== 'cancelled');
   const now = new Date();
-  const todayISO = now.toISOString().split('T')[0];
+  const todayISO = formatLocalISO(now);
 
   const monthKey = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
   const thisMonthKey = monthKey(now);
@@ -54,13 +55,13 @@ export function computePortfolioStats(
 
   const weekKeys = new Set<string>();
   mine.forEach((b) => {
-    const sow = startOfWeek(new Date(b.date));
-    weekKeys.add(sow.toISOString().split('T')[0]);
+    const sow = startOfWeek(new Date(`${b.date}T00:00:00`));
+    weekKeys.add(formatLocalISO(sow));
   });
   let currentStreakWeeks = 0;
   {
     let cursor = startOfWeek(now);
-    while (weekKeys.has(cursor.toISOString().split('T')[0])) {
+    while (weekKeys.has(formatLocalISO(cursor))) {
       currentStreakWeeks += 1;
       cursor.setDate(cursor.getDate() - 7);
     }

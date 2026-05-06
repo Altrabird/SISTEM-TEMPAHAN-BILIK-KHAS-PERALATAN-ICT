@@ -7,6 +7,7 @@ import {
 import { Asset, Booking, Resource } from '../types';
 import { fetchBookingsFromCloud, fetchAssetsFromCloud } from '../lib/storage';
 import { isSupabaseEnabled } from '../lib/supabase';
+import { todayLocalISO, daysBetween as daysBetweenISO } from '../lib/dates';
 
 interface Props {
   rooms: Resource[];
@@ -18,13 +19,9 @@ interface Props {
 
 type FilterMode = 'active' | 'overdue' | 'all-loans' | 'returned';
 
-function todayISO(): string {
-  return new Date().toISOString().split('T')[0];
-}
-
-function daysBetween(a: string, b: string): number {
-  return Math.ceil((new Date(a).getTime() - new Date(b).getTime()) / 86400000);
-}
+// Local-timezone-safe helpers re-exported from ../lib/dates
+const todayISO = todayLocalISO;
+const daysBetween = daysBetweenISO;
 
 export function ActiveLoansView({ rooms, equipment, localBookings, localAssets, onMarkReturn }: Props) {
   const [bookings, setBookings] = useState<Booking[]>(localBookings);

@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { CalendarDays, Clock, Search, Filter, Trash2, Download, Printer, PackageCheck } from 'lucide-react';
 import { Booking, Resource, Profile } from '../types';
+import { todayLocalISO } from '../lib/dates';
 
 interface Props {
   bookings: Booking[];
@@ -16,7 +17,7 @@ export function BookingsView({ bookings, rooms, equipment, profile, onCancel, on
   const [filter, setFilter] = useState<'all' | 'mine' | 'upcoming'>('all');
 
   const allResources = useMemo(() => [...rooms, ...equipment], [rooms, equipment]);
-  const today = new Date().toISOString().split('T')[0];
+  const today = todayLocalISO();
 
   const filtered = useMemo(() => {
     return bookings.filter((b) => {
@@ -51,7 +52,7 @@ export function BookingsView({ bookings, rooms, equipment, profile, onCancel, on
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `tempahan_skbt_${new Date().toISOString().split('T')[0]}.csv`;
+    a.download = `tempahan_skbt_${todayLocalISO()}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   };
