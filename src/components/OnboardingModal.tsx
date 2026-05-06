@@ -107,42 +107,52 @@ export function OnboardingModal({ onComplete }: Props) {
   });
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-4">
       <div className="absolute inset-0 bg-slate-900/70 backdrop-blur-sm" />
       <motion.div
         initial={{ opacity: 0, scale: 0.95, y: 20 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
-        className="relative bg-white rounded-3xl w-full max-w-lg p-8 shadow-2xl border border-slate-200 overflow-hidden"
+        className="relative bg-white rounded-2xl sm:rounded-3xl w-full max-w-lg p-5 sm:p-8 shadow-2xl border border-slate-200 max-h-[92vh] overflow-y-auto"
       >
-        <div className="absolute -top-16 -right-16 w-48 h-48 rounded-full bg-blue-500/10 blur-2xl" />
-        <div className="absolute -bottom-16 -left-16 w-48 h-48 rounded-full bg-indigo-500/10 blur-2xl" />
+        <div className="absolute -top-16 -right-16 w-48 h-48 rounded-full bg-blue-500/10 blur-2xl pointer-events-none" />
+        <div className="absolute -bottom-16 -left-16 w-48 h-48 rounded-full bg-indigo-500/10 blur-2xl pointer-events-none" />
+
+        {/* Floating admin login chip — always visible at top-right */}
+        {mode !== 'admin' && (
+          <button
+            onClick={() => setMode('admin')}
+            className="absolute top-4 right-4 z-10 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-widest border border-slate-200 bg-white text-slate-600 hover:border-purple-400 hover:bg-purple-50 hover:text-purple-700 transition-all shadow-sm"
+          >
+            <Shield size={11} /> Pentadbir
+          </button>
+        )}
 
         <div className="relative">
-          <div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-white shadow-lg mb-4 ${
+          <div className={`w-12 h-12 sm:w-14 sm:h-14 rounded-2xl flex items-center justify-center text-white shadow-lg mb-3 sm:mb-4 ${
             mode === 'admin'
               ? 'bg-gradient-to-br from-purple-600 to-indigo-700'
               : 'bg-gradient-to-br from-blue-600 to-indigo-600'
           }`}>
-            {mode === 'admin' ? <Shield size={24} /> : <Sparkles size={24} />}
+            {mode === 'admin' ? <Shield size={22} /> : <Sparkles size={22} />}
           </div>
 
           {mode === 'admin' ? (
             <>
-              <p className="text-[10px] font-bold uppercase tracking-widest text-purple-600 mb-2">Akses Pentadbir</p>
-              <h2 className="text-xl font-bold tracking-tight text-slate-900 leading-snug">Log Masuk Pentadbir</h2>
-              <p className="text-sm text-slate-500 mt-2 leading-relaxed">
+              <p className="text-[10px] font-bold uppercase tracking-widest text-purple-600 mb-1.5">Akses Pentadbir</p>
+              <h2 className="text-lg sm:text-xl font-bold tracking-tight text-slate-900 leading-snug">Log Masuk Pentadbir</h2>
+              <p className="text-xs sm:text-sm text-slate-500 mt-1.5 leading-relaxed">
                 Masukkan ID dan kata laluan pentadbir untuk akses tetapan & paparan pemantauan.
               </p>
             </>
           ) : (
             <>
-              <p className="text-[10px] font-bold uppercase tracking-widest text-blue-600 mb-2">Selamat Datang ke</p>
-              <h2 className="text-xl font-bold tracking-tight text-slate-900 leading-snug">
+              <p className="text-[10px] font-bold uppercase tracking-widest text-blue-600 mb-1.5">Selamat Datang ke</p>
+              <h2 className="text-base sm:text-xl font-bold tracking-tight text-slate-900 leading-snug">
                 Sistem Tempahan Bilik Khas & Peralatan ICT
               </h2>
               <p className="text-sm font-bold text-slate-700 mt-0.5">SK Bandar Tawau</p>
-              <p className="text-sm text-slate-500 mt-2 leading-relaxed">
-                Mari kita sediakan portfolio anda. Pilih profil sedia ada atau cipta yang baru.
+              <p className="text-xs sm:text-sm text-slate-500 mt-1.5 leading-relaxed">
+                Pilih profil sedia ada atau cipta yang baru.
               </p>
             </>
           )}
@@ -356,16 +366,6 @@ export function OnboardingModal({ onComplete }: Props) {
             </form>
           )}
 
-          {mode !== 'admin' && (
-            <div className="mt-6 pt-5 border-t border-slate-100">
-              <button
-                onClick={() => setMode('admin')}
-                className="w-full flex items-center justify-center gap-2 text-[11px] font-bold uppercase tracking-widest text-slate-500 hover:text-purple-600 transition-colors py-2"
-              >
-                <Shield size={12} /> Log Masuk Pentadbir
-              </button>
-            </div>
-          )}
         </div>
 
         <style>{`
