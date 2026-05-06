@@ -176,7 +176,7 @@ export function ReportsView({ rooms, equipment, localBookings }: Props) {
           <div>
             <p className="text-xs font-bold uppercase tracking-widest text-slate-700">SK Bandar Tawau</p>
             <h1 className="text-xl font-black text-slate-900">Sistem Tempahan Bilik Khas & Peralatan ICT</h1>
-            <p className="text-sm font-bold text-slate-700 uppercase tracking-widest">Laporan Rumusan Sistem 2026</p>
+            <p className="text-sm font-bold text-slate-700 uppercase tracking-widest">Laporan Rumusan Sistem</p>
           </div>
           <div className="text-right">
             <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Dicetak Pada</p>

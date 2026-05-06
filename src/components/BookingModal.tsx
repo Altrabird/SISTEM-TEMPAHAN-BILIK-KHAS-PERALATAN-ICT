@@ -93,14 +93,16 @@ export function BookingModal({ open, onClose, rooms, equipment, profile, initial
             exit={{ opacity: 0, scale: 0.95, y: 20 }}
             className="bg-white rounded-2xl w-full max-w-xl p-8 relative shadow-2xl overflow-hidden border border-slate-200"
           >
-            <div className="flex justify-between items-start mb-8">
-              <div>
-                <h2 className="text-xl font-bold tracking-tight text-slate-800">Borang Tempahan 2026</h2>
-                <p className="text-xs text-slate-500 mt-1 uppercase tracking-widest font-semibold">SKBT Resource Management</p>
-              </div>
-              <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-lg transition-colors text-slate-400 hover:text-slate-600">
+            <div className="relative mb-6">
+              <button
+                onClick={onClose}
+                className="absolute right-0 top-0 p-2 hover:bg-slate-100 rounded-lg transition-colors text-slate-400 hover:text-slate-600"
+              >
                 <X size={20} />
               </button>
+              <h2 className="text-xl font-bold tracking-tight text-slate-800 text-center">
+                Borang Tempahan
+              </h2>
             </div>
 
             <form onSubmit={handle} className="space-y-6">

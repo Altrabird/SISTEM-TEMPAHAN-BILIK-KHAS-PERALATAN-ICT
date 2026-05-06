@@ -23,7 +23,7 @@ export function SettingsView({ profile, onReset, onSaveProfile, onSwitchProfile 
     <div className="max-w-3xl space-y-6">
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-8 space-y-2">
         <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest">Konfigurasi</h3>
-        <h2 className="text-2xl font-bold tracking-tight text-slate-800">Tetapan Sistem 2026</h2>
+        <h2 className="text-2xl font-bold tracking-tight text-slate-800">Tetapan Sistem</h2>
         <p className="text-sm text-slate-500">Urus profil, data dan tetapan aplikasi SKBT.</p>
       </div>
 
@@ -190,11 +190,13 @@ export function SettingsView({ profile, onReset, onSaveProfile, onSwitchProfile 
       <div className="grid grid-cols-2 gap-4">
         <div className="p-4 bg-white border border-slate-200 rounded-xl">
           <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Versi Stabil</p>
-          <p className="text-sm font-bold text-slate-700">v1.3.0 (Portfolio Edition)</p>
+          <p className="text-sm font-bold text-slate-700">v1.4.0</p>
         </div>
         <div className="p-4 bg-white border border-slate-200 rounded-xl">
           <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Tahun Aktif</p>
-          <p className="text-sm font-bold text-blue-600 tracking-widest leading-none mt-1">2026 / 2027</p>
+          <p className="text-sm font-bold text-blue-600 tracking-widest leading-none mt-1">
+            {new Date().getFullYear()}
+          </p>
         </div>
       </div>
 

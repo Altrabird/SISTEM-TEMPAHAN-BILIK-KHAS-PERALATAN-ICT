@@ -188,7 +188,7 @@ export function DashboardView({ bookings, rooms, equipment, profile, onOpenPortf
               </p>
               <div className="p-3 bg-white/10 rounded-lg flex items-center gap-3 border border-white/20 backdrop-blur-sm">
                 <div className="w-2 h-2 bg-emerald-400 rounded-full shadow-[0_0_8px_rgba(52,211,153,0.7)]" />
-                <span className="text-[10px] font-bold uppercase tracking-widest text-emerald-100">Tahun Operasi 2026 Active</span>
+                <span className="text-[10px] font-bold uppercase tracking-widest text-emerald-100">Sistem Aktif</span>
               </div>
             </div>
           </div>
