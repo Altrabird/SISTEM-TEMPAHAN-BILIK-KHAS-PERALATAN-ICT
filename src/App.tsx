@@ -30,6 +30,7 @@ import { PortfolioView } from './views/PortfolioView';
 import { AdminView } from './views/AdminView';
 import { ReportsView } from './views/ReportsView';
 import { ActiveLoansView } from './views/ActiveLoansView';
+import { MyLoansView } from './views/MyLoansView';
 
 import { OnboardingModal } from './components/OnboardingModal';
 import { BookingModal } from './components/BookingModal';
@@ -46,7 +47,7 @@ import { BulkAssetActionsModal, BulkAction } from './components/BulkAssetActions
 import { ReturnLoanModal } from './components/ReturnLoanModal';
 import { PWAUpdatePrompt } from './components/PWAUpdatePrompt';
 
-type View = 'dashboard' | 'portfolio' | 'bookings' | 'rooms' | 'equipment' | 'admin' | 'reports' | 'loans' | 'settings';
+type View = 'dashboard' | 'portfolio' | 'bookings' | 'rooms' | 'equipment' | 'returns' | 'admin' | 'reports' | 'loans' | 'settings';
 
 export default function App() {
   const [activeView, setActiveView] = useState<View>('dashboard');
@@ -376,6 +377,7 @@ export default function App() {
     { id: 'bookings' as View, label: 'Tempahan', icon: CalendarDays },
     { id: 'rooms' as View, label: 'Bilik Khas', icon: DoorOpen },
     { id: 'equipment' as View, label: 'Peralatan ICT', icon: Laptop },
+    { id: 'returns' as View, label: 'Pemulangan', icon: PackageCheck },
     ...(isAdmin
       ? [
           { id: 'admin' as View, label: 'Pentadbir', icon: Shield },
@@ -634,6 +636,19 @@ export default function App() {
                   isAdmin={isAdmin}
                   onEdit={(r) => setEditingResource(r)}
                   onBulkLoan={() => setShowBulkLoanModal(true)}
+                />
+              )}
+              {activeView === 'returns' && (
+                <MyLoansView
+                  profile={profile}
+                  bookings={bookings}
+                  assets={assets}
+                  equipment={equipment}
+                  onReturn={(booking) => {
+                    const asset = assets.find((a) => a.id === booking.resourceId) ?? null;
+                    setReturningLoan({ booking, asset });
+                  }}
+                  onNewLoan={() => setActiveView('equipment')}
                 />
               )}
               {activeView === 'admin' && isAdmin && (
