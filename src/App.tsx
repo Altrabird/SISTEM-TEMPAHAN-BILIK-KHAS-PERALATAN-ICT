@@ -156,12 +156,17 @@ export default function App() {
     setActiveView('dashboard');
   };
 
+  // A booking still "occupies" the resource only while it's confirmed/pending.
+  // Cancelled OR returned bookings are released and don't block future ones.
+  const isActiveBooking = (b: Booking) =>
+    b.status !== 'cancelled' && b.status !== 'returned';
+
   // Room booking — single-day time-slot overlap.
   const checkConflict = (resourceId: string, date: string, start: string, end: string) =>
     bookings.find((b) =>
       b.resourceId === resourceId &&
       b.date === date &&
-      b.status !== 'cancelled' &&
+      isActiveBooking(b) &&
       start < b.endTime &&
       end > b.startTime,
     );
@@ -170,7 +175,7 @@ export default function App() {
   const checkLoanConflict = (assetId: string, startDate: string, returnDate: string) =>
     bookings.find((b) => {
       if (b.resourceId !== assetId) return false;
-      if (b.status === 'cancelled') return false;
+      if (!isActiveBooking(b)) return false;
       const bStart = b.date;
       const bEnd = b.returnDate ?? b.date;
       return startDate <= bEnd && returnDate >= bStart;
