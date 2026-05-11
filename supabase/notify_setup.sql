@@ -145,6 +145,94 @@ for each row
 execute function public.notify_booking_telegram();
 
 -- ---------------------------------------------------------------------------
+-- 3b. Trigger: notify when a loan is marked as returned
+--     (fires on status transition INTO 'returned')
+-- ---------------------------------------------------------------------------
+create or replace function public.notify_return_telegram()
+returns trigger
+language plpgsql
+security definer
+set search_path = public, extensions
+as $$
+declare
+  resource_name text;
+  category_name text;
+  serial_no text;
+  msg text;
+  expected_return date;
+  return_day date;
+  diff_days int;
+  status_label text;
+  status_emoji text;
+  recorder text;
+begin
+  if not (new.status = 'returned' and (old.status is distinct from 'returned')) then
+    return new;
+  end if;
+
+  if new.resource_type = 'equipment' then
+    select a.name, a.serial_number, e.name
+      into resource_name, serial_no, category_name
+      from public.assets a
+      left join public.equipment e on e.id = a.resource_id
+      where a.id = new.resource_id;
+    if resource_name is null then
+      resource_name := new.resource_id;
+    elsif category_name is not null then
+      resource_name := resource_name || ' (' || category_name || ')';
+    end if;
+  else
+    select name into resource_name from public.rooms where id = new.resource_id;
+    resource_name := coalesce(resource_name, new.resource_id);
+  end if;
+
+  expected_return := coalesce(new.return_date, new.date);
+  return_day := coalesce(
+    (new.returned_at at time zone 'Asia/Kuala_Lumpur')::date,
+    (now() at time zone 'Asia/Kuala_Lumpur')::date
+  );
+  diff_days := return_day - expected_return;
+
+  if diff_days < 0 then
+    status_emoji := '🌟';
+    status_label := 'Pulang AWAL ' || abs(diff_days) || ' hari';
+  elsif diff_days = 0 then
+    status_emoji := '✅';
+    status_label := 'Pulang TEPAT pada masa';
+  else
+    status_emoji := '⚠️';
+    status_label := 'Pulang LEWAT ' || diff_days || ' hari';
+  end if;
+
+  recorder := coalesce(new.returned_by_name, 'pengguna');
+
+  msg :=
+       '📦 <b>Pemulangan ICT</b>' || E'\n\n'
+    || '🏷 ' || resource_name
+    || coalesce(E'\n   <code>' || serial_no || '</code>', '')
+    || E'\n👤 Peminjam: <b>' || new.user_name || '</b>'
+    || E'\n📅 Patut kembali: ' || expected_return::text
+    || E'\n📥 Direkod oleh: <b>' || recorder || '</b>'
+    || E'\n' || status_emoji || ' ' || status_label
+    || coalesce(E'\n📝 Nota: <i>' || new.return_notes || '</i>', '')
+    || E'\n\n🔗 https://tempah.altrabird.click';
+
+  perform public.tg_send(msg);
+  return new;
+exception when others then
+  raise warning 'notify_return_telegram failed: %', sqlerrm;
+  return new;
+end;
+$$;
+
+drop trigger if exists trg_notify_return_telegram on public.bookings;
+create trigger trg_notify_return_telegram
+after update of status on public.bookings
+for each row
+when (new.status = 'returned' and old.status is distinct from 'returned')
+execute function public.notify_return_telegram();
+
+-- ---------------------------------------------------------------------------
 -- 4. Daily reminder — overdue + due-tomorrow ICT loans
 -- ---------------------------------------------------------------------------
 create or replace function public.tg_remind_overdue_loans()

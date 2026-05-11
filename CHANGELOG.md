@@ -7,6 +7,8 @@ Major milestones for the TEMPAH project.
 ### Major
 - Telegram bot integration ("Tempah@SKBT") posting to a group/channel
 - Instant notification on every booking INSERT (rooms + ICT loans)
+- Instant notification on every return (status → 'returned') with
+  early / on-time / late label, recorder name, and condition notes
 - Daily 08:00 MY digest of overdue ICT loans + ESOK-due reminders
 - Pure SQL implementation — no edge functions needed:
   - `pg_net` for async HTTP from Postgres
