@@ -259,11 +259,16 @@ certbot --nginx -d tempah.altrabird.click
 - ✅ PWA: installable, offline app shell, auto-update prompt
 - ✅ Supabase as source of truth (rooms, equipment, assets, bookings, profiles all sync)
 - ✅ Production deploy on VPS w/ HTTPS
-- ✅ Telegram notifications: instant on every booking + every return
-  (with early/on-time/late label) + daily reminder for overdue /
-  due-tomorrow ICT loans (pure SQL via pg_net + pg_cron; bot token
-  in Vault; trigger lives in DB so it fires for any source including
-  direct SQL inserts/updates)
+- ✅ Telegram notifications (5 events; pure SQL via pg_net + pg_cron):
+  - Instant on booking INSERT
+  - Instant on return (status → returned, with early/on-time/late label)
+  - Instant on cancel (status → cancelled, with admin/self attribution + optional reason)
+  - Daily 06:30 MY morning digest of TODAY's room bookings + multi-day loans
+  - Daily 08:00 MY overdue/due-tomorrow ICT reminder
+  Bot token + chat_id in Supabase Vault; triggers in DB so they fire
+  for any source (app, direct SQL, future clients)
+- ✅ Admin can cancel any booking (not just own); cancellation is logged
+  with cancelled_at, cancelled_by_id/name, optional cancel_reason
 
 ---
 

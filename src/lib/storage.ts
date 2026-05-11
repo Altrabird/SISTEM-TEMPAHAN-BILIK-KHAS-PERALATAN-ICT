@@ -271,6 +271,10 @@ export async function updateBookingInCloud(booking: Booking): Promise<{ ok: bool
     returned_by_id: booking.returnedById ?? null,
     returned_by_name: booking.returnedByName ?? null,
     return_notes: booking.returnNotes ?? null,
+    cancelled_at: booking.cancelledAt ? new Date(booking.cancelledAt).toISOString() : null,
+    cancelled_by_id: booking.cancelledById ?? null,
+    cancelled_by_name: booking.cancelledByName ?? null,
+    cancel_reason: booking.cancelReason ?? null,
   }).eq('id', booking.id);
   if (error) return { ok: false, error: error.message };
   return { ok: true };
@@ -338,5 +342,9 @@ export async function fetchBookingsFromCloud(): Promise<Booking[] | null> {
     returnedById: row.returned_by_id ?? undefined,
     returnedByName: row.returned_by_name ?? undefined,
     returnNotes: row.return_notes ?? undefined,
+    cancelledAt: row.cancelled_at ? new Date(row.cancelled_at).getTime() : undefined,
+    cancelledById: row.cancelled_by_id ?? undefined,
+    cancelledByName: row.cancelled_by_name ?? undefined,
+    cancelReason: row.cancel_reason ?? undefined,
   }));
 }

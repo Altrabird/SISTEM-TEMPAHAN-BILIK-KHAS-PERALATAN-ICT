@@ -86,11 +86,15 @@ create table if not exists public.bookings (
   returned_by_name text,
   return_notes     text
 );
-alter table public.bookings add column if not exists return_date      date;
-alter table public.bookings add column if not exists returned_at      timestamptz;
-alter table public.bookings add column if not exists returned_by_id   text;
-alter table public.bookings add column if not exists returned_by_name text;
-alter table public.bookings add column if not exists return_notes     text;
+alter table public.bookings add column if not exists return_date       date;
+alter table public.bookings add column if not exists returned_at       timestamptz;
+alter table public.bookings add column if not exists returned_by_id    text;
+alter table public.bookings add column if not exists returned_by_name  text;
+alter table public.bookings add column if not exists return_notes      text;
+alter table public.bookings add column if not exists cancelled_at      timestamptz;
+alter table public.bookings add column if not exists cancelled_by_id   text;
+alter table public.bookings add column if not exists cancelled_by_name text;
+alter table public.bookings add column if not exists cancel_reason     text;
 
 -- Status enum (handle migration from old 3-value enum to new 4-value enum)
 alter table public.bookings drop constraint if exists bookings_status_check;

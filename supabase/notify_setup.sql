@@ -233,6 +233,80 @@ when (new.status = 'returned' and old.status is distinct from 'returned')
 execute function public.notify_return_telegram();
 
 -- ---------------------------------------------------------------------------
+-- 3c. Trigger: notify when status transitions INTO 'cancelled'
+-- ---------------------------------------------------------------------------
+create or replace function public.notify_cancel_telegram()
+returns trigger
+language plpgsql
+security definer
+set search_path = public, extensions
+as $$
+declare
+  resource_name text;
+  category_name text;
+  serial_no text;
+  msg text;
+  is_loan boolean := (new.resource_type = 'equipment');
+  date_line text;
+  canceller text;
+  by_admin boolean;
+begin
+  if not (new.status = 'cancelled' and (old.status is distinct from 'cancelled')) then
+    return new;
+  end if;
+
+  if is_loan then
+    select a.name, a.serial_number, e.name
+      into resource_name, serial_no, category_name
+      from public.assets a
+      left join public.equipment e on e.id = a.resource_id
+      where a.id = new.resource_id;
+    if resource_name is null then
+      resource_name := new.resource_id;
+    elsif category_name is not null then
+      resource_name := resource_name || ' (' || category_name || ')';
+    end if;
+  else
+    select name into resource_name from public.rooms where id = new.resource_id;
+    resource_name := coalesce(resource_name, new.resource_id);
+  end if;
+
+  if is_loan and new.return_date is not null and new.return_date <> new.date then
+    date_line := '📅 Pinjam: ' || new.date::text || ' → Kembali: ' || new.return_date::text;
+  else
+    date_line := '📅 ' || new.date::text || '  ⏰ ' || new.start_time::text || ' – ' || new.end_time::text;
+  end if;
+
+  canceller := coalesce(new.cancelled_by_name, 'pengguna');
+  by_admin := new.cancelled_by_id is not null and new.cancelled_by_id <> new.user_id;
+
+  msg :=
+       '❌ <b>' || (case when is_loan then 'Pinjaman Dibatalkan' else 'Tempahan Dibatalkan' end) || '</b>' || E'\n\n'
+    || '🏷 ' || resource_name
+    || coalesce(E'\n   <code>' || serial_no || '</code>', '')
+    || E'\n' || date_line
+    || E'\n👤 Pemohon asal: <b>' || new.user_name || '</b>'
+    || E'\n✋ Dibatalkan oleh: <b>' || canceller || '</b>'
+       || (case when by_admin then ' <i>(admin)</i>' else '' end)
+    || coalesce(E'\n📝 Sebab: <i>' || new.cancel_reason || '</i>', '')
+    || E'\n\n🔗 https://tempah.altrabird.click';
+
+  perform public.tg_send(msg);
+  return new;
+exception when others then
+  raise warning 'notify_cancel_telegram failed: %', sqlerrm;
+  return new;
+end;
+$$;
+
+drop trigger if exists trg_notify_cancel_telegram on public.bookings;
+create trigger trg_notify_cancel_telegram
+after update of status on public.bookings
+for each row
+when (new.status = 'cancelled' and old.status is distinct from 'cancelled')
+execute function public.notify_cancel_telegram();
+
+-- ---------------------------------------------------------------------------
 -- 4. Daily reminder — overdue + due-tomorrow ICT loans
 -- ---------------------------------------------------------------------------
 create or replace function public.tg_remind_overdue_loans()
@@ -313,6 +387,105 @@ select cron.schedule(
   'tempah_remind_overdue_daily',
   '0 0 * * *',
   $cron$ select public.tg_remind_overdue_loans(); $cron$
+);
+
+-- ---------------------------------------------------------------------------
+-- 5. Morning digest — list TODAY's active room bookings + multi-day loans
+--    Runs at 22:30 UTC = 06:30 Asia/Kuala_Lumpur every day. Silent if nothing.
+-- ---------------------------------------------------------------------------
+create or replace function public.tg_morning_digest()
+returns void
+language plpgsql
+security definer
+set search_path = public, extensions
+as $$
+declare
+  today_my date := (now() at time zone 'Asia/Kuala_Lumpur')::date;
+  rooms_today_count int;
+  loans_today_count int;
+  rooms_lines text;
+  loans_lines text;
+  msg text;
+begin
+  with rooms_today as (
+    select b.user_name, b.start_time, b.end_time, b.purpose,
+           coalesce(r.name, b.resource_id) as resource_name
+    from public.bookings b
+    left join public.rooms r on r.id = b.resource_id
+    where b.resource_type = 'room'
+      and b.status = 'confirmed'
+      and b.date = today_my
+  )
+  select count(*),
+         string_agg(
+           '• <b>' || resource_name || '</b> — ' || user_name
+           || ' — ' || start_time::text || '–' || end_time::text
+           || coalesce(' <i>(' || purpose || ')</i>', ''),
+           E'\n'
+           order by start_time
+         )
+    into rooms_today_count, rooms_lines
+    from rooms_today;
+
+  with loans_active as (
+    select b.user_name, b.date, coalesce(b.return_date, b.date) as ret, b.purpose,
+           a.name as asset_name, a.serial_number,
+           coalesce(b.return_date, b.date) - today_my as days_left
+    from public.bookings b
+    left join public.assets a on a.id = b.resource_id
+    where b.resource_type = 'equipment'
+      and b.status = 'confirmed'
+      and b.date <= today_my
+      and coalesce(b.return_date, b.date) >= today_my
+      and coalesce(b.return_date, b.date) > b.date  -- multi-day only
+  )
+  select count(*),
+         string_agg(
+           '• <b>' || coalesce(asset_name, 'unit') || '</b>'
+           || ' — ' || user_name
+           || ' — pulang ' || ret::text
+           || (case when days_left = 0 then ' <b>(HARI INI)</b>'
+                    when days_left = 1 then ' (esok)'
+                    else ' (' || days_left || ' hari lagi)' end),
+           E'\n'
+           order by ret
+         )
+    into loans_today_count, loans_lines
+    from loans_active;
+
+  if rooms_today_count = 0 and loans_today_count = 0 then
+    return;
+  end if;
+
+  msg := '🌅 <b>Selamat Pagi!</b>' || E'\n'
+      || '<i>Aktiviti hari ini: ' || today_my::text || '</i>' || E'\n';
+
+  if rooms_today_count > 0 then
+    msg := msg || E'\n🚪 <b>BILIK YANG DITEMPAH (' || rooms_today_count || ')</b>'
+                || E'\n' || rooms_lines || E'\n';
+  end if;
+
+  if loans_today_count > 0 then
+    msg := msg || E'\n💻 <b>PERALATAN ICT DALAM PINJAMAN (' || loans_today_count || ')</b>'
+                || E'\n' || loans_lines || E'\n';
+  end if;
+
+  msg := msg || E'\n🔗 https://tempah.altrabird.click';
+
+  perform public.tg_send(msg);
+end;
+$$;
+
+do $$
+begin
+  perform cron.unschedule('tempah_morning_digest_daily');
+exception when others then null;
+end $$;
+
+select cron.schedule(
+  'tempah_morning_digest_daily',
+  '30 22 * * *',     -- 06:30 Asia/Kuala_Lumpur (UTC+8)
+  $cron$ select public.tg_morning_digest(); $cron$
 );
 
 -- ---------------------------------------------------------------------------

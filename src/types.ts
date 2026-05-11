@@ -54,6 +54,11 @@ export interface Booking {
   returnedById?: string;     // admin profile id
   returnedByName?: string;   // admin name (denormalised)
   returnNotes?: string;      // condition / damage notes
+  // Cancel logging
+  cancelledAt?: number;
+  cancelledById?: string;
+  cancelledByName?: string;
+  cancelReason?: string;
 }
 
 export type AchievementId =

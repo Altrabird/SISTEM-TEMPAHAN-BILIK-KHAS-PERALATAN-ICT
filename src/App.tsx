@@ -287,9 +287,21 @@ export default function App() {
     return null;
   };
 
-  const cancelBooking = (id: string) => {
+  const cancelBooking = (id: string, reason?: string) => {
+    if (!profile) return;
     setBookings((prev) => {
-      const next = prev.map((b) => (b.id === id ? { ...b, status: 'cancelled' as const } : b));
+      const next = prev.map((b) =>
+        b.id === id
+          ? {
+              ...b,
+              status: 'cancelled' as const,
+              cancelledAt: Date.now(),
+              cancelledById: profile.id,
+              cancelledByName: profile.name,
+              cancelReason: reason && reason.trim().length > 0 ? reason.trim() : undefined,
+            }
+          : b,
+      );
       const updated = next.find((b) => b.id === id);
       if (updated) void updateBookingInCloud(updated);
       return next;
@@ -603,6 +615,7 @@ export default function App() {
                   rooms={rooms}
                   equipment={equipment}
                   profile={profile}
+                  isAdmin={isAdmin}
                   onCancel={cancelBooking}
                   onReturn={(booking) => {
                     const asset = assets.find((a) => a.id === booking.resourceId) ?? null;

@@ -8,11 +8,12 @@ interface Props {
   rooms: Resource[];
   equipment: Resource[];
   profile: Profile | null;
-  onCancel: (id: string) => void;
+  isAdmin?: boolean;
+  onCancel: (id: string, reason?: string) => void;
   onReturn?: (booking: Booking) => void;
 }
 
-export function BookingsView({ bookings, rooms, equipment, profile, onCancel, onReturn }: Props) {
+export function BookingsView({ bookings, rooms, equipment, profile, isAdmin, onCancel, onReturn }: Props) {
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<'all' | 'mine' | 'upcoming'>('all');
 
@@ -280,14 +281,20 @@ export function BookingsView({ bookings, rooms, equipment, profile, onCancel, on
                     <PackageCheck size={11} /> Pulangkan
                   </button>
                 )}
-                {b.status === 'confirmed' && profile && b.userId === profile.id && (
+                {b.status === 'confirmed' && profile && (b.userId === profile.id || isAdmin) && (
                   <button
                     onClick={() => {
-                      if (confirm('Batalkan tempahan ini?')) onCancel(b.id);
+                      const isOwn = b.userId === profile.id;
+                      const promptMsg = isOwn
+                        ? 'Sebab batal (pilihan, boleh kosongkan):'
+                        : `Batalkan tempahan ${b.userName}?\nSebab batal (pilihan):`;
+                      const reason = prompt(promptMsg, '') ?? null;
+                      if (reason === null) return; // user pressed Cancel
+                      onCancel(b.id, reason);
                     }}
                     className="px-2.5 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-widest text-rose-600 hover:bg-rose-50 transition-colors flex items-center gap-1"
                   >
-                    <Trash2 size={11} /> Batal
+                    <Trash2 size={11} /> Batal{!isAdmin || b.userId === profile.id ? '' : ' (Admin)'}
                   </button>
                 )}
               </div>
@@ -377,13 +384,19 @@ export function BookingsView({ bookings, rooms, equipment, profile, onCancel, on
                         <PackageCheck size={14} />
                       </button>
                     )}
-                    {b.status === 'confirmed' && profile && b.userId === profile.id && (
+                    {b.status === 'confirmed' && profile && (b.userId === profile.id || isAdmin) && (
                       <button
                         onClick={() => {
-                          if (confirm('Batalkan tempahan ini?')) onCancel(b.id);
+                          const isOwn = b.userId === profile.id;
+                          const promptMsg = isOwn
+                            ? 'Sebab batal (pilihan, boleh kosongkan):'
+                            : `Batalkan tempahan ${b.userName}?\nSebab batal (pilihan):`;
+                          const reason = prompt(promptMsg, '') ?? null;
+                          if (reason === null) return;
+                          onCancel(b.id, reason);
                         }}
                         className="p-1.5 rounded-lg text-slate-400 hover:bg-rose-50 hover:text-rose-600 transition-colors"
-                        title="Batalkan"
+                        title={b.userId === profile.id ? 'Batalkan' : 'Batalkan (Admin)'}
                       >
                         <Trash2 size={14} />
                       </button>

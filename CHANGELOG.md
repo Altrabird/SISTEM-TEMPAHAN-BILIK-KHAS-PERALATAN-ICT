@@ -9,7 +9,14 @@ Major milestones for the TEMPAH project.
 - Instant notification on every booking INSERT (rooms + ICT loans)
 - Instant notification on every return (status → 'returned') with
   early / on-time / late label, recorder name, and condition notes
+- Instant notification on every cancel (status → 'cancelled') with
+  admin/self attribution + optional reason
+- Daily 06:30 MY morning digest — today's room bookings + multi-day
+  loans currently active (silent if nothing to remind)
 - Daily 08:00 MY digest of overdue ICT loans + ESOK-due reminders
+- Admin can cancel any booking (not only their own); cancellation
+  attribution is recorded in cancelled_at, cancelled_by_id/name,
+  cancel_reason columns
 - Pure SQL implementation — no edge functions needed:
   - `pg_net` for async HTTP from Postgres
   - `pg_cron` for daily schedule
