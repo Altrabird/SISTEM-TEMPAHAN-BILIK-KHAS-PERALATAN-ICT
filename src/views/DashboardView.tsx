@@ -3,18 +3,20 @@ import { motion } from 'motion/react';
 import {
   DoorOpen, Laptop, Clock, CheckCircle2, Info, AlertCircle, TrendingUp, CalendarDays
 } from 'lucide-react';
-import { Booking, Resource, Profile } from '../types';
+import { Asset, Booking, Resource, Profile } from '../types';
 import { todayLocalISO } from '../lib/dates';
+import { resolveResourceName } from '../lib/resources';
 
 interface Props {
   bookings: Booking[];
   rooms: Resource[];
   equipment: Resource[];
+  assets: Asset[];
   profile: Profile | null;
   onOpenPortfolio: () => void;
 }
 
-export function DashboardView({ bookings, rooms, equipment, profile, onOpenPortfolio }: Props) {
+export function DashboardView({ bookings, rooms, equipment, assets, profile, onOpenPortfolio }: Props) {
   const today = todayLocalISO();
   const todayBookings = bookings.filter((b) => b.date === today && b.status !== 'cancelled');
   const myBookings = profile ? bookings.filter((b) => b.userId === profile.id && b.status !== 'cancelled') : [];
@@ -54,7 +56,10 @@ export function DashboardView({ bookings, rooms, equipment, profile, onOpenPortf
     },
   ];
 
-  const allResources = [...rooms, ...equipment];
+  // Kept for shape compatibility but lookups now go through resolveResourceName
+  // so asset-id bookings (ICT loans) resolve to "Asset (Category)" instead of N/A.
+  const _allResources = [...rooms, ...equipment];
+  void _allResources;
 
   return (
     <div className="space-y-6">
@@ -150,7 +155,7 @@ export function DashboardView({ bookings, rooms, equipment, profile, onOpenPortf
                     </div>
                     <div>
                       <p className="font-bold text-sm text-slate-800">
-                        {allResources.find((r) => r.id === b.resourceId)?.name || 'N/A'}
+                        {resolveResourceName(b.resourceId, rooms, equipment, assets)}
                       </p>
                       <p className="text-[11px] text-slate-500 font-medium leading-relaxed">{b.purpose}</p>
                     </div>

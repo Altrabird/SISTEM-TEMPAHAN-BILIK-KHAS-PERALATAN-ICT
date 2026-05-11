@@ -4,20 +4,22 @@ import {
   Printer, FileText, Users, CalendarDays, Clock, MapPin, TrendingUp,
   RefreshCw, AlertCircle, Cpu, DoorOpen, Trophy
 } from 'lucide-react';
-import { Booking, Resource, Profile } from '../types';
+import { Asset, Booking, Resource, Profile } from '../types';
 import { ROLE_LABELS, ACHIEVEMENTS } from '../constants';
 import { computePortfolioStats } from '../lib/achievements';
 import { fetchProfilesFromCloud, fetchBookingsFromCloud } from '../lib/storage';
 import { isSupabaseEnabled } from '../lib/supabase';
 import { todayLocalISO } from '../lib/dates';
+import { resolveResourceName } from '../lib/resources';
 
 interface Props {
   rooms: Resource[];
   equipment: Resource[];
+  assets: Asset[];
   localBookings: Booking[];
 }
 
-export function ReportsView({ rooms, equipment, localBookings }: Props) {
+export function ReportsView({ rooms, equipment, assets, localBookings }: Props) {
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [bookings, setBookings] = useState<Booking[]>(localBookings);
   const [loading, setLoading] = useState(true);
@@ -47,6 +49,10 @@ export function ReportsView({ rooms, equipment, localBookings }: Props) {
   }, []);
 
   const allResources = useMemo(() => [...rooms, ...equipment], [rooms, equipment]);
+  const nameOf = useMemo(
+    () => (id: string) => resolveResourceName(id, rooms, equipment, assets),
+    [rooms, equipment, assets],
+  );
   const today = new Date();
   const todayISO = todayLocalISO();
   const monthKey = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
@@ -108,11 +114,14 @@ export function ReportsView({ rooms, equipment, localBookings }: Props) {
     return [...counts.entries()]
       .map(([id, count]) => {
         const res = allResources.find((r) => r.id === id);
-        return { id, name: res?.name ?? id, type: res?.type ?? 'unknown', count };
+        const asset = assets.find((a) => a.id === id);
+        // Asset IDs (ast-*) are ICT loans → type 'equipment'
+        const type = res?.type ?? (asset ? 'equipment' : 'unknown');
+        return { id, name: nameOf(id), type, count };
       })
       .sort((a, b) => b.count - a.count)
       .slice(0, 10);
-  }, [bookings, allResources]);
+  }, [bookings, allResources, assets, nameOf]);
 
   // Top users
   const topUsers = useMemo(() => {
@@ -386,7 +395,7 @@ export function ReportsView({ rooms, equipment, localBookings }: Props) {
                     <p className="text-[10px] text-slate-500">{b.startTime} - {b.endTime}</p>
                   </td>
                   <td className="px-4 py-2.5 text-xs font-bold text-slate-700">
-                    {allResources.find((r) => r.id === b.resourceId)?.name ?? b.resourceId}
+                    {nameOf(b.resourceId)}
                   </td>
                   <td className="px-4 py-2.5 text-xs text-slate-600">{b.userName}</td>
                   <td className="px-4 py-2.5 text-[11px] text-slate-500 max-w-xs truncate">{b.purpose}</td>
@@ -419,7 +428,7 @@ export function ReportsView({ rooms, equipment, localBookings }: Props) {
                     {new Date(b.createdAt).toLocaleDateString('ms-MY', { day: 'numeric', month: 'short', year: 'numeric' })}
                   </td>
                   <td className="px-4 py-2.5 text-xs font-bold text-slate-700">
-                    {allResources.find((r) => r.id === b.resourceId)?.name ?? b.resourceId}
+                    {nameOf(b.resourceId)}
                   </td>
                   <td className="px-4 py-2.5 text-xs text-slate-600">{b.userName}</td>
                   <td className="px-4 py-2.5">

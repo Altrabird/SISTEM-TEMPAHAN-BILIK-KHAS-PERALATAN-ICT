@@ -5,10 +5,11 @@ import {
   Compass, Cpu, Rocket, Crown, CalendarDays, Clock, MapPin, TrendingUp,
   Heart, Activity, Target, Lock
 } from 'lucide-react';
-import { Booking, Resource, Profile, Achievement } from '../types';
+import { Asset, Booking, Resource, Profile, Achievement } from '../types';
 import { ACHIEVEMENTS, ROLE_LABELS } from '../constants';
 import { computePortfolioStats } from '../lib/achievements';
 import { todayLocalISO } from '../lib/dates';
+import { resolveResourceName } from '../lib/resources';
 
 const ICONS: Record<string, React.ComponentType<{ size?: number; className?: string }>> = {
   Sparkles, Star, Award, Medal, Trophy, Sunrise, Moon, Flame, Zap,
@@ -47,18 +48,22 @@ interface Props {
   bookings: Booking[];
   rooms: Resource[];
   equipment: Resource[];
+  assets: Asset[];
   onEditProfile?: () => void;
   onNewBooking?: () => void;
   readOnly?: boolean;
 }
 
-export function PortfolioView({ profile, bookings, rooms, equipment, onEditProfile, onNewBooking, readOnly = false }: Props) {
+export function PortfolioView({ profile, bookings, rooms, equipment, assets, onEditProfile, onNewBooking, readOnly = false }: Props) {
   const stats = useMemo(
     () => computePortfolioStats(bookings, rooms, equipment, profile.id, profile.joinedAt),
     [bookings, rooms, equipment, profile.id, profile.joinedAt],
   );
 
-  const allResources = useMemo(() => [...rooms, ...equipment], [rooms, equipment]);
+  const nameOf = useMemo(
+    () => (id: string) => resolveResourceName(id, rooms, equipment, assets),
+    [rooms, equipment, assets],
+  );
   const today = todayLocalISO();
   const myBookings = useMemo(
     () => bookings.filter((b) => b.userId === profile.id && b.status !== 'cancelled'),
@@ -245,7 +250,7 @@ export function PortfolioView({ profile, bookings, rooms, equipment, onEditProfi
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-bold text-slate-800 truncate">
-                          {allResources.find((r) => r.id === b.resourceId)?.name ?? b.resourceId}
+                          {nameOf(b.resourceId)}
                         </p>
                         <p className="text-[11px] text-slate-500 truncate">{b.purpose}</p>
                       </div>
@@ -303,7 +308,7 @@ export function PortfolioView({ profile, bookings, rooms, equipment, onEditProfi
                   {upcoming.map((b) => (
                     <li key={b.id} className="p-4">
                       <p className="text-sm font-bold text-slate-800">
-                        {allResources.find((r) => r.id === b.resourceId)?.name ?? b.resourceId}
+                        {nameOf(b.resourceId)}
                       </p>
                       <p className="text-[11px] text-slate-500 mt-0.5 flex items-center gap-1">
                         <CalendarDays size={11} /> {b.date} • {b.startTime}-{b.endTime}

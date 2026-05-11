@@ -626,6 +626,7 @@ export default function App() {
                   bookings={bookings}
                   rooms={rooms}
                   equipment={equipment}
+                  assets={assets}
                   profile={profile}
                   onOpenPortfolio={() => setActiveView('portfolio')}
                 />
@@ -636,6 +637,7 @@ export default function App() {
                   bookings={bookings}
                   rooms={rooms}
                   equipment={equipment}
+                  assets={assets}
                   onEditProfile={() => setShowEditProfileModal(true)}
                   onNewBooking={() => openBookingModal()}
                 />
@@ -648,6 +650,7 @@ export default function App() {
                   bookings={bookings}
                   rooms={rooms}
                   equipment={equipment}
+                  assets={assets}
                   profile={profile}
                   isAdmin={isAdmin}
                   onCancel={cancelBooking}
@@ -703,6 +706,7 @@ export default function App() {
                 <AdminView
                   rooms={rooms}
                   equipment={equipment}
+                  assets={assets}
                   localBookings={bookings}
                 />
               )}
@@ -710,6 +714,7 @@ export default function App() {
                 <ReportsView
                   rooms={rooms}
                   equipment={equipment}
+                  assets={assets}
                   localBookings={bookings}
                 />
               )}

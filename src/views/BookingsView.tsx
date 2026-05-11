@@ -1,23 +1,28 @@
 import React, { useState, useMemo } from 'react';
 import { CalendarDays, Clock, Search, Filter, Trash2, Download, Printer, PackageCheck } from 'lucide-react';
-import { Booking, Resource, Profile } from '../types';
+import { Asset, Booking, Resource, Profile } from '../types';
 import { todayLocalISO } from '../lib/dates';
+import { resolveResourceName } from '../lib/resources';
 
 interface Props {
   bookings: Booking[];
   rooms: Resource[];
   equipment: Resource[];
+  assets: Asset[];
   profile: Profile | null;
   isAdmin?: boolean;
   onCancel: (id: string, reason?: string) => void;
   onReturn?: (booking: Booking) => void;
 }
 
-export function BookingsView({ bookings, rooms, equipment, profile, isAdmin, onCancel, onReturn }: Props) {
+export function BookingsView({ bookings, rooms, equipment, assets, profile, isAdmin, onCancel, onReturn }: Props) {
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<'all' | 'mine' | 'upcoming'>('all');
 
-  const allResources = useMemo(() => [...rooms, ...equipment], [rooms, equipment]);
+  const nameOf = useMemo(
+    () => (id: string) => resolveResourceName(id, rooms, equipment, assets),
+    [rooms, equipment, assets],
+  );
   const today = todayLocalISO();
 
   const filtered = useMemo(() => {
@@ -26,20 +31,20 @@ export function BookingsView({ bookings, rooms, equipment, profile, isAdmin, onC
       if (filter === 'upcoming' && b.date < today) return false;
       if (search) {
         const q = search.toLowerCase();
-        const resourceName = allResources.find((r) => r.id === b.resourceId)?.name?.toLowerCase() ?? '';
+        const resourceName = nameOf(b.resourceId).toLowerCase();
         const haystack = `${b.userName} ${b.purpose} ${resourceName}`.toLowerCase();
         if (!haystack.includes(q)) return false;
       }
       return true;
     });
-  }, [bookings, filter, search, profile, allResources, today]);
+  }, [bookings, filter, search, profile, nameOf, today]);
 
   const exportCSV = () => {
     const rows = [
       ['ID', 'Sumber', 'Tarikh', 'Mula', 'Tamat', 'Pemohon', 'Tujuan', 'Status'],
       ...filtered.map((b) => [
         b.id,
-        allResources.find((r) => r.id === b.resourceId)?.name ?? b.resourceId,
+        nameOf(b.resourceId),
         b.date,
         b.startTime,
         b.endTime,
@@ -61,7 +66,7 @@ export function BookingsView({ bookings, rooms, equipment, profile, isAdmin, onC
   const printList = () => window.print();
 
   const printSingle = (b: Booking) => {
-    const resourceName = allResources.find((r) => r.id === b.resourceId)?.name ?? b.resourceId;
+    const resourceName = nameOf(b.resourceId);
     const w = window.open('', '_blank', 'width=800,height=900');
     if (!w) {
       alert('Pop-up disekat. Sila benarkan pop-up untuk laman ini.');
@@ -212,7 +217,7 @@ export function BookingsView({ bookings, rooms, equipment, profile, isAdmin, onC
       {/* Mobile card list — visible only on small screens */}
       <div className="md:hidden divide-y divide-slate-100">
         {filtered.length > 0 ? filtered.map((b) => {
-          const resourceName = allResources.find((r) => r.id === b.resourceId)?.name || b.resourceId;
+          const resourceName = nameOf(b.resourceId);
           const initials = b.userName.split(' ').map((n) => n[0]).join('').slice(0, 2).toUpperCase();
           const statusTone =
             b.status === 'confirmed' ? 'bg-blue-50 text-blue-700 border-blue-200' :
@@ -326,7 +331,7 @@ export function BookingsView({ bookings, rooms, equipment, profile, isAdmin, onC
                 <td className="px-6 py-4">
                   <p className="text-[10px] font-mono text-blue-600 uppercase mb-0.5">#{b.id.split('-')[1]?.slice(-6) ?? b.id.slice(-6)}</p>
                   <p className="text-sm font-bold text-slate-800">
-                    {allResources.find((r) => r.id === b.resourceId)?.name || b.resourceId}
+                    {nameOf(b.resourceId)}
                   </p>
                 </td>
                 <td className="px-6 py-4">

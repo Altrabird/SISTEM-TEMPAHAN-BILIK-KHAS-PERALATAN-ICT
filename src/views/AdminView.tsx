@@ -4,24 +4,26 @@ import {
   Users, CalendarDays, TrendingUp, MapPin, Shield, Search, RefreshCw,
   ArrowUpDown, X, Crown, Trophy, ChevronRight, Cloud, CloudOff
 } from 'lucide-react';
-import { Booking, Resource, Profile } from '../types';
+import { Asset, Booking, Resource, Profile } from '../types';
 import { ROLE_LABELS, ACHIEVEMENTS } from '../constants';
 import { computePortfolioStats } from '../lib/achievements';
 import { fetchProfilesFromCloud, fetchBookingsFromCloud } from '../lib/storage';
 import { isSupabaseEnabled } from '../lib/supabase';
 import { todayLocalISO } from '../lib/dates';
+import { resolveResourceName } from '../lib/resources';
 import { PortfolioView } from './PortfolioView';
 
 interface Props {
   rooms: Resource[];
   equipment: Resource[];
+  assets: Asset[];
   localBookings: Booking[];
 }
 
 type SortKey = 'name' | 'total' | 'thisMonth' | 'streak' | 'achievements' | 'lastActive';
 type SortDir = 'asc' | 'desc';
 
-export function AdminView({ rooms, equipment, localBookings }: Props) {
+export function AdminView({ rooms, equipment, assets, localBookings }: Props) {
   const [profiles, setProfiles] = useState<Profile[] | null>(null);
   const [bookings, setBookings] = useState<Booking[]>(localBookings);
   const [loading, setLoading] = useState(true);
@@ -53,8 +55,6 @@ export function AdminView({ rooms, equipment, localBookings }: Props) {
     void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  const allResources = useMemo(() => [...rooms, ...equipment], [rooms, equipment]);
 
   const rows = useMemo(() => {
     if (!profiles) return [];
@@ -101,8 +101,7 @@ export function AdminView({ rooms, equipment, localBookings }: Props) {
     let busiest: { name: string; count: number } | null = null;
     resourceCount.forEach((count, id) => {
       if (!busiest || count > busiest.count) {
-        const r = allResources.find((x) => x.id === id);
-        busiest = { name: r?.name ?? id, count };
+        busiest = { name: resolveResourceName(id, rooms, equipment, assets), count };
       }
     });
 
@@ -113,7 +112,7 @@ export function AdminView({ rooms, equipment, localBookings }: Props) {
       today: active.filter((b) => b.date === todayISO).length,
       busiest,
     };
-  }, [profiles, bookings, allResources]);
+  }, [profiles, bookings, rooms, equipment, assets]);
 
   const toggleSort = (key: SortKey) => {
     if (sortKey === key) {
@@ -322,6 +321,7 @@ export function AdminView({ rooms, equipment, localBookings }: Props) {
             bookings={bookings}
             rooms={rooms}
             equipment={equipment}
+            assets={assets}
             onClose={() => setSelectedProfileId(null)}
           />
         )}
@@ -331,12 +331,13 @@ export function AdminView({ rooms, equipment, localBookings }: Props) {
 }
 
 function ProfileDetailModal({
-  profile, bookings, rooms, equipment, onClose,
+  profile, bookings, rooms, equipment, assets, onClose,
 }: {
   profile: Profile;
   bookings: Booking[];
   rooms: Resource[];
   equipment: Resource[];
+  assets: Asset[];
   onClose: () => void;
 }) {
   return (
@@ -372,6 +373,7 @@ function ProfileDetailModal({
             bookings={bookings}
             rooms={rooms}
             equipment={equipment}
+            assets={assets}
             readOnly
           />
         </div>
