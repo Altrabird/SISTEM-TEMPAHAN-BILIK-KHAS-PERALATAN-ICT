@@ -25,9 +25,8 @@ interface Props {
 
 const PERIOD_PRESETS: { id: string; label: string; days: number }[] = [
   { id: '1d', label: '1 Hari', days: 1 },
-  { id: '3d', label: '3 Hari', days: 3 },
   { id: '1w', label: '1 Minggu', days: 7 },
-  { id: '2w', label: '2 Minggu', days: 14 },
+  { id: '1m', label: '1 Bulan', days: 30 },
   { id: 'custom', label: 'Pilih', days: 0 },
 ];
 
@@ -42,6 +41,7 @@ export function BulkLoanModal({ open, assets, equipment, profile, onClose, onSub
   const [purposeCategory, setPurposeCategory] = useState('PdPc');
   const [purposeDetail, setPurposeDetail] = useState('');
   const [period, setPeriod] = useState<string>('1d');
+  const [customStart, setCustomStart] = useState<string>(todayISO());
   const [customReturn, setCustomReturn] = useState<string>(addDaysISO(todayISO(), 1));
   const [error, setError] = useState<string | null>(null);
 
@@ -53,12 +53,14 @@ export function BulkLoanModal({ open, assets, equipment, profile, onClose, onSub
       setPurposeCategory('PdPc');
       setPurposeDetail('');
       setPeriod('1d');
+      setCustomStart(todayISO());
       setCustomReturn(addDaysISO(todayISO(), 1));
       setError(null);
     }
   }, [open]);
 
-  const startDate = todayISO();
+  // Preset rows always start today; only "Pilih" lets the user pick a start date.
+  const startDate = period === 'custom' ? customStart : todayISO();
   const returnDate = useMemo(() => {
     if (period === 'custom') return customReturn;
     const preset = PERIOD_PRESETS.find((p) => p.id === period);
@@ -353,7 +355,7 @@ export function BulkLoanModal({ open, assets, equipment, profile, onClose, onSub
                 {/* Tempoh */}
                 <div className="space-y-2">
                   <label className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Tempoh</label>
-                  <div className="grid grid-cols-5 gap-2">
+                  <div className="grid grid-cols-4 gap-2">
                     {PERIOD_PRESETS.map((p) => (
                       <button
                         key={p.id}
@@ -370,14 +372,34 @@ export function BulkLoanModal({ open, assets, equipment, profile, onClose, onSub
                     ))}
                   </div>
                   {period === 'custom' && (
-                    <input
-                      type="date"
-                      value={customReturn}
-                      min={startDate}
-                      onChange={(e) => setCustomReturn(e.target.value)}
-                      required
-                      className="w-full mt-2 px-3 py-2 rounded-lg border border-slate-200 text-sm font-medium focus:border-purple-500 focus:ring-2 focus:ring-purple-500/10 outline-none transition-all"
-                    />
+                    <div className="grid grid-cols-2 gap-2 mt-2">
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Dari</label>
+                        <input
+                          type="date"
+                          value={customStart}
+                          onChange={(e) => {
+                            const v = e.target.value;
+                            setCustomStart(v);
+                            // Auto-bump end date if it falls behind the new start
+                            if (customReturn < v) setCustomReturn(v);
+                          }}
+                          required
+                          className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm font-medium focus:border-purple-500 focus:ring-2 focus:ring-purple-500/10 outline-none transition-all"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Hingga</label>
+                        <input
+                          type="date"
+                          value={customReturn}
+                          min={customStart}
+                          onChange={(e) => setCustomReturn(e.target.value)}
+                          required
+                          className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm font-medium focus:border-purple-500 focus:ring-2 focus:ring-purple-500/10 outline-none transition-all"
+                        />
+                      </div>
+                    </div>
                   )}
                 </div>
 
