@@ -456,7 +456,7 @@ export default function App() {
           </button>
         </div>
 
-        <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
+        <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto scrollbar-hide">
           {navItems.map((item) => {
             const active = activeView === item.id;
             return (
@@ -566,7 +566,7 @@ export default function App() {
           </div>
         </header>
 
-        <div className="app-content flex-1 overflow-y-auto p-4 md:p-8 pb-24 md:pb-8 bg-slate-50">
+        <div className="app-content flex-1 overflow-y-auto scrollbar-hide p-4 md:p-8 pb-24 md:pb-8 bg-slate-50">
           <AnimatePresence mode="wait">
             <motion.div
               key={activeView}

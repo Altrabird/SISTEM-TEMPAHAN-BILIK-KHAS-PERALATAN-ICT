@@ -217,7 +217,7 @@ export function BulkLoanModal({ open, assets, equipment, profile, onClose, onSub
                   </div>
                 </div>
 
-                <div className="flex-1 overflow-y-auto px-6 pb-3">
+                <div className="flex-1 overflow-y-auto scrollbar-hide px-6 pb-3">
                   {grouped.length === 0 && (
                     <div className="p-12 text-center text-xs text-slate-400 italic">
                       Tiada unit tersedia untuk dipinjam.
@@ -301,7 +301,7 @@ export function BulkLoanModal({ open, assets, equipment, profile, onClose, onSub
 
             {/* Step 2: Form */}
             {step === 'form' && (
-              <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-5">
+              <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto scrollbar-hide p-6 space-y-5">
                 {/* Picked summary */}
                 <div className="bg-gradient-to-br from-slate-50 to-purple-50 border border-slate-200 rounded-xl p-4">
                   <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-2">

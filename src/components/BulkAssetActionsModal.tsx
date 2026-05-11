@@ -224,7 +224,7 @@ export function BulkAssetActionsModal({ open, resourceId, assets, equipment, onC
                   </div>
                 </div>
 
-                <div className="flex-1 overflow-y-auto px-6 pb-3">
+                <div className="flex-1 overflow-y-auto scrollbar-hide px-6 pb-3">
                   {grouped.length === 0 && (
                     <div className="p-12 text-center text-xs text-slate-400 italic">
                       Tiada unit ditemui.
@@ -312,7 +312,7 @@ export function BulkAssetActionsModal({ open, resourceId, assets, equipment, onC
 
             {/* Step 2: Action */}
             {step === 'action' && (
-              <div className="flex-1 overflow-y-auto p-6 space-y-5">
+              <div className="flex-1 overflow-y-auto scrollbar-hide p-6 space-y-5">
                 <div className="bg-blue-50 border border-blue-100 rounded-xl p-4">
                   <p className="text-[10px] font-bold uppercase tracking-widest text-blue-700 mb-2">
                     {pickedAssets.length} Unit Dipilih

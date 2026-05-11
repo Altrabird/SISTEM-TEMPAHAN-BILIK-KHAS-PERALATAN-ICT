@@ -92,7 +92,7 @@ export function AddAssetModal({ open, initialResourceId, equipment, onClose, onS
             initial={{ opacity: 0, scale: 0.95, y: 20 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 20 }}
-            className="bg-white rounded-2xl w-full max-w-lg p-8 relative shadow-2xl border border-slate-200 max-h-[92vh] overflow-y-auto"
+            className="bg-white rounded-2xl w-full max-w-lg p-8 relative shadow-2xl border border-slate-200 max-h-[92vh] overflow-y-auto scrollbar-hide"
           >
             <div className="flex justify-between items-start mb-6">
               <div>

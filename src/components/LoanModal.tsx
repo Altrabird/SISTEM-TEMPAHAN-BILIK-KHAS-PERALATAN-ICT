@@ -106,7 +106,7 @@ export function LoanModal({ open, asset, category, profile, fromQr, onClose, onS
             initial={{ opacity: 0, y: 40 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 40 }}
-            className="bg-white rounded-t-3xl sm:rounded-2xl w-full sm:max-w-md p-6 sm:p-8 relative shadow-2xl border border-slate-200 max-h-[92vh] overflow-y-auto"
+            className="bg-white rounded-t-3xl sm:rounded-2xl w-full sm:max-w-md p-6 sm:p-8 relative shadow-2xl border border-slate-200 max-h-[92vh] overflow-y-auto scrollbar-hide"
           >
             <div className="flex justify-between items-start mb-5">
               <div className="flex items-center gap-3">

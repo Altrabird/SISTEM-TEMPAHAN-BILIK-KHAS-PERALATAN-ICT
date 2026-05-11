@@ -41,6 +41,17 @@ body {
   padding-bottom: env(safe-area-inset-bottom);
 }
 
+/* Hide scrollbar visuals on modals while keeping scroll behaviour. */
+.scrollbar-hide {
+  -ms-overflow-style: none;     /* IE/Edge */
+  scrollbar-width: none;        /* Firefox */
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;                /* Chrome, Safari, Opera */
+  width: 0;
+  height: 0;
+}
+
 /* ========================================================================
    Print styles — applied only when the user prints (Cmd/Ctrl+P or Cetak).
    Strips chrome (sidebar, header, modals, action buttons) and presents a
