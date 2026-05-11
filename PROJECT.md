@@ -82,6 +82,7 @@ src/
     ├── BulkLoanModal.tsx       Multi-asset ICT loan (2-step picker)
     ├── BulkAssetActionsModal.tsx  Admin: lock/status/delete in bulk
     ├── ReturnLoanModal.tsx     Mark loan as returned + condition notes
+    ├── BulkReturnModal.tsx     Confirm batch return + shared notes
     ├── AssetListModal.tsx      Asset grid for a category
     ├── AddAssetModal.tsx       Admin: register new unit
     ├── EditAssetModal.tsx      Admin: full asset edit (incl. delete)
@@ -234,46 +235,74 @@ certbot --nginx -d tempah.altrabird.click
 |-----|---------|--------|
 | Modal backdrop on top of content | Modal looks transparent | Add `relative` to content div |
 | UTC dates | "1 Hari" preset shows same date | Use `lib/dates.ts` |
+| Conflict check includes 'returned' | Re-borrow blocked even after return | `isActiveBooking()` excludes both cancelled + returned |
+| Native scrollbars on modals | Ugly grey bar on right | `.scrollbar-hide` utility class |
 | nginx.conf overwrite | tempah.altrabird.click serves another site | Re-run certbot |
 | LF/CRLF on Windows clone | git noise on every save | `.gitattributes` if it ever bothers |
 | deploy.sh permission denied | Just `bash` it once | `git update-index --chmod=+x` already applied |
 | Tailwind purge missing class | Style absent in build | Use full literal class names, no string interp |
+| Bulk-update spamming Telegram | N triggers fire, N messages | Use RPC + `set_config('tempah.suppress_*_notify','on',true)` |
 
 ---
 
-## 10. What's done (v1.4.0)
+## 10. What's done (v1.6.0)
 
-- ✅ Profile + portfolio (avatar upload, achievements, streak, charts)
-- ✅ Onboarding (3 modes: Cipta Baru / Profil Sedia Ada / Admin login)
-- ✅ Bilik Khas booking with conflict detection
-- ✅ ICT loan: single, bulk, QR-driven
+### Core booking flows
+- ✅ Bilik Khas booking with time-slot conflict detection
+- ✅ Peralatan ICT loan: single, bulk, QR-driven (date-range)
+- ✅ Conflict check correctly ignores cancelled AND returned bookings
+- ✅ Year-agnostic copy + local-timezone date math everywhere
+
+### Inventory + lock
+- ✅ Per-asset Edit + Delete (admin only)
+- ✅ Bulk asset actions (lock / unlock / status / delete)
+- ✅ Lock system 3 levels: room, equipment category, individual asset
 - ✅ Per-asset QR sticker + bulk sticker sheet (A4, 18-up)
-- ✅ Lock system (room / category / per-asset) with reason text
-- ✅ Edit/delete per asset; bulk actions (lock/unlock/status/delete)
-- ✅ Self-service return + admin return with notes
-- ✅ Admin "Pinjaman ICT" view (all loans, filters, drill-down)
-- ✅ User "Pemulangan" view (own loans, prominent return CTA)
-- ✅ Reports (KPIs, trend chart, top users/resources, printable)
-- ✅ Print: report, booking list, single slip, asset QR, bulk QR
+
+### Profiles + portfolio
+- ✅ Profile + portfolio (avatar upload, achievements, streak, charts)
+- ✅ 13-achievement gallery (bronze/silver/gold/platinum)
+- ✅ Onboarding (3 modes: Cipta Baru / Profil Sedia Ada / Admin login)
+- ✅ Profile picker — load existing profile on new device
+
+### Returns + cancellations
+- ✅ Self-service return (borrower's own loans)
+- ✅ Admin return on behalf of any borrower
+- ✅ Bulk return — checkbox-select multiple → one Telegram digest
+- ✅ Self-service cancel (own booking)
+- ✅ Admin cancel any booking with optional reason
+- ✅ Audit columns: returned_at/by + cancelled_at/by + reasons
+
+### Admin views
+- ✅ Pentadbir leaderboard with per-user drill-down to PortfolioView
+- ✅ Pinjaman ICT view (all loans, filters: Aktif / Lewat / Pulang)
+- ✅ Reports — KPIs, trend chart, top users/resources, printable A4
+- ✅ Tetapan — profile editor, reset, backend status
+
+### UI
+- ✅ Card / List view toggle for Bilik Khas + Peralatan ICT
 - ✅ Mobile-first: drawer + bottom nav, vibrant Hadir@SKBT-style
-- ✅ PWA: installable, offline app shell, auto-update prompt
-- ✅ Supabase as source of truth (rooms, equipment, assets, bookings, profiles all sync)
-- ✅ Production deploy on VPS w/ HTTPS
-- ✅ Telegram notifications (6 events; pure SQL via pg_net + pg_cron):
-  - Instant on booking INSERT
-  - Instant on return (status → returned, with early/on-time/late label)
-  - Instant on cancel (status → cancelled, with admin/self attribution + optional reason)
-  - Bulk return: ONE consolidated digest via bulk_return_loans() RPC
-    (per-row trigger suppressed via session config flag)
-  - Daily 06:30 MY morning digest of TODAY's room bookings + multi-day loans
-  - Daily 08:00 MY overdue/due-tomorrow ICT reminder
-  Bot token + chat_id in Supabase Vault; triggers in DB so they fire
-  for any source (app, direct SQL, future clients)
-- ✅ Pemulangan Pukal: borrowers can multi-select active loans (checkbox
-  + select-all) in MyLoansView and return them in one shot — single
-  Telegram digest message instead of N individual ones
-- ✅ Admin can cancel any booking (not just own); cancellation is logged
-  with cancelled_at, cancelled_by_id/name, optional cancel_reason
+- ✅ Print-friendly: report, booking list, single slip, asset QR, bulk QR
+- ✅ Hidden native scrollbars on modals + sidebar + main content
+- ✅ PWA — installable, offline app shell, auto-update prompt
+
+### Telegram notifications (6 events)
+- ✅ Instant: booking INSERT (rooms + ICT loans)
+- ✅ Instant: return (with early / on-time / late label + notes)
+- ✅ Instant: cancel (with admin attribution + optional reason)
+- ✅ Bulk return: ONE consolidated digest via `bulk_return_loans()` RPC
+  (per-row trigger suppressed via session config flag)
+- ✅ Daily 06:30 MY morning digest of today's rooms + multi-day loans
+- ✅ Daily 08:00 MY overdue + due-tomorrow ICT reminder
+
+Bot token + chat_id in Supabase Vault. Triggers live in DB so they
+fire for any source (app, direct SQL, future clients). Failures are
+logged but never block a booking save.
+
+### Backend + ops
+- ✅ Supabase as source of truth (rooms, equipment, assets, bookings, profiles)
+- ✅ Production deploy on Contabo VPS with HTTPS (Certbot)
+- ✅ Manual deploy from PowerShell: `ssh root@... "/opt/tempah/deploy/deploy.sh"`
 
 ---
 
@@ -324,3 +353,13 @@ curl https://tempah.altrabird.click/manifest.webmanifest
 - Bahasa Malaysia for user-facing text + chat replies. Code + comments in English.
 - Push commits to `main` directly — no PR workflow yet.
 - Use the bug list (section 9) when something looks wrong; usually it's one of those.
+- Telegram bot is `@TempahSKBT_bot` posting to group "Tempah@SKBT"
+  (chat_id `-1003958937726`). Token + chat_id stored in Supabase Vault
+  as `tg_bot_token` / `tg_chat_id`.
+- For ANY change that mass-updates rows AND has a per-row trigger,
+  always use the suppress-config pattern (see `bulk_return_loans` for
+  reference) — otherwise you spam the Telegram group.
+- Modals MUST have `relative` on the content motion.div — without
+  it, the absolute backdrop paints over everything.
+- Dates: never `toISOString().split('T')[0]` — always import from
+  `lib/dates.ts`. UTC vs Asia/Kuala_Lumpur off-by-one bites otherwise.

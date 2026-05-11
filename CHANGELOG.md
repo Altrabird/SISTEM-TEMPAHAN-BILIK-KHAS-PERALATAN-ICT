@@ -2,36 +2,84 @@
 
 Major milestones for the TEMPAH project.
 
-## v1.5.0 — Telegram Notifications (current)
+## v1.6.0 — Telegram Notifications + Bulk Workflows (current)
 
-### Major
-- Telegram bot integration ("Tempah@SKBT") posting to a group/channel
-- Instant notification on every booking INSERT (rooms + ICT loans)
-- Instant notification on every return (status → 'returned') with
-  early / on-time / late label, recorder name, and condition notes
-- Instant notification on every cancel (status → 'cancelled') with
-  admin/self attribution + optional reason
-- Daily 06:30 MY morning digest — today's room bookings + multi-day
-  loans currently active (silent if nothing to remind)
-- Daily 08:00 MY digest of overdue ICT loans + ESOK-due reminders
-- Admin can cancel any booking (not only their own); cancellation
-  attribution is recorded in cancelled_at, cancelled_by_id/name,
-  cancel_reason columns
-- Pemulangan Pukal: select-multiple in MyLoansView + single Supabase
-  RPC call (bulk_return_loans) that updates all rows AND sends ONE
-  consolidated Telegram digest. Per-row return trigger is suppressed
-  during the bulk via tempah.suppress_return_notify session config.
-- Pure SQL implementation — no edge functions needed:
-  - `pg_net` for async HTTP from Postgres
-  - `pg_cron` for daily schedule
-  - Supabase Vault for encrypted bot-token + chat-id storage
-  - `tg_send(text)` helper, `notify_booking_telegram()` trigger,
-    `tg_remind_overdue_loans()` cron callback
+**The single largest milestone since v1.4.0. Five Telegram triggers,
+two daily cron digests, bulk return, admin cancel, list view, and a
+critical conflict-check bug fix — all live on tempah.altrabird.click.**
 
-### Notes
-- Trigger fires server-side on the DB row, so it catches bookings made
-  via the app, direct SQL, or any future client — single source of truth.
-- Notifications fail silently (warning only) — never block a booking save.
+### Telegram notifications (5 events, all server-side)
+
+| # | Event | Trigger | Format |
+|---|-------|---------|--------|
+| 1 | Tempahan/Pinjaman baru | INSERT on `bookings` | 🚪/💻 with date, time, purpose |
+| 2 | Pemulangan tunggal | UPDATE status → returned | 📦 with awal/tepat/lewat label |
+| 3 | Pemulangan PUKAL | RPC `bulk_return_loans()` | 📦📦 single digest with all units |
+| 4 | Pembatalan | UPDATE status → cancelled | ❌ with cancelled_by + (admin) tag + reason |
+| 5 | Morning digest | pg_cron 06:30 MY | 🌅 today's rooms + active multi-day loans |
+| 6 | Overdue digest | pg_cron 08:00 MY | 📢 LEWAT + ESOK-due ICT loans |
+
+Pure SQL implementation — `pg_net` for HTTP, `pg_cron` for schedule,
+Supabase Vault for bot-token + chat-id. Triggers live in DB, so
+notifications fire for any source (app, direct SQL, future clients).
+
+Failure-mode safe: `EXCEPTION WHEN OTHERS` in every trigger, so a
+Telegram outage will never block a booking save.
+
+### Cancel workflow
+
+- Admin can now cancel ANY booking (was: own only)
+- Cancel button prompts for an optional reason
+- New columns: `cancelled_at`, `cancelled_by_id`, `cancelled_by_name`, `cancel_reason`
+- Cancel notification message tags admin cancellations with `(admin)`
+
+### Bulk return workflow
+
+- "Pilih untuk Pulangkan Pukal" mode in MyLoansView
+- Checkbox per active loan + Pilih Semua / Buang Semua
+- Single Supabase RPC `bulk_return_loans(ids, by_id, by_name, notes)`
+  updates all rows AND emits ONE consolidated Telegram digest
+- Per-row return trigger is bypassed via `tempah.suppress_return_notify`
+  session config — no Telegram spam
+
+### UI
+
+- New card/list view toggle on Bilik Khas + Peralatan ICT (with
+  localStorage persist per browser)
+- List view is ~3-4x denser, ideal for fast scanning a long inventory
+
+### Bug fixes
+
+- **Critical**: `checkConflict` and `checkLoanConflict` were only
+  excluding `cancelled` bookings. Returned bookings still blocked
+  re-borrowing. Fixed via shared `isActiveBooking` helper that
+  excludes both `cancelled` AND `returned`.
+- Hide native scrollbar visuals on all 9+ scrollable modals + sidebar
+  + main content (`.scrollbar-hide` utility)
+- Bulk* modals were missing `relative` class — content rendered under
+  the dim backdrop, looked transparent
+
+### Schema additions
+
+- `bookings.cancelled_at`, `cancelled_by_id`, `cancelled_by_name`, `cancel_reason`
+- `public.tg_send(text)` — generic Telegram helper
+- `public.notify_booking_telegram()` — INSERT trigger
+- `public.notify_return_telegram()` — UPDATE → returned trigger (now
+  honours suppress flag)
+- `public.notify_cancel_telegram()` — UPDATE → cancelled trigger
+- `public.bulk_return_loans()` — RPC for batch return + single digest
+- `public.tg_remind_overdue_loans()` — cron callback (08:00 MY)
+- `public.tg_morning_digest()` — cron callback (06:30 MY)
+
+---
+
+## v1.5.0 — Telegram Notifications (initial)
+
+- Telegram bot integration ("Tempah@SKBT")
+- Instant notification on every booking INSERT
+- Instant notification on every return
+- Daily 08:00 MY overdue + due-tomorrow ICT reminder
+- Pure SQL via pg_net + pg_cron + Vault
 
 ---
 
