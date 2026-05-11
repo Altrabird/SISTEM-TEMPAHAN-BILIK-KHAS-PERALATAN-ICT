@@ -94,7 +94,15 @@ declare
   heading text;
   date_line text;
   is_loan boolean := (new.resource_type = 'equipment');
+  suppress text;
 begin
+  -- Bulk loan uses a session-local config to bypass per-row notifications.
+  -- The bulk_loan_assets RPC sets this and emits ONE consolidated digest.
+  suppress := current_setting('tempah.suppress_loan_notify', true);
+  if suppress = 'on' then
+    return new;
+  end if;
+
   if is_loan then
     select a.name, a.serial_number, e.name
       into resource_name, serial_no, category_name
@@ -316,6 +324,103 @@ end;
 $$;
 
 grant execute on function public.bulk_return_loans(text[], text, text, text) to anon, authenticated;
+
+-- ---------------------------------------------------------------------------
+-- 3b''. Bulk loan RPC — insert N bookings + send ONE Telegram digest.
+--       Suppresses the per-row insert trigger via session config flag.
+--       `rows` is a jsonb array of { id, resource_id } pairs.
+-- ---------------------------------------------------------------------------
+create or replace function public.bulk_loan_assets(
+  rows jsonb,
+  by_user_id text,
+  by_user_name text,
+  start_date date,
+  return_date date,
+  start_time time,
+  end_time time,
+  purpose text,
+  created_at timestamptz default now()
+)
+returns int
+language plpgsql
+security definer
+set search_path = public, extensions
+as $$
+declare
+  count_inserted int := 0;
+  lines text;
+  msg text;
+  total_days int;
+  total_label text;
+begin
+  if rows is null or jsonb_array_length(rows) = 0 then
+    return 0;
+  end if;
+
+  perform set_config('tempah.suppress_loan_notify', 'on', true);
+
+  insert into public.bookings (
+    id, resource_id, resource_type, user_id, user_name,
+    date, return_date, start_time, end_time,
+    purpose, status, created_at
+  )
+  select
+    (r->>'id'),
+    (r->>'resource_id'),
+    'equipment',
+    by_user_id,
+    by_user_name,
+    start_date,
+    return_date,
+    start_time,
+    end_time,
+    purpose,
+    'confirmed',
+    created_at
+  from jsonb_array_elements(rows) as r;
+  get diagnostics count_inserted = row_count;
+
+  if count_inserted = 0 then
+    return 0;
+  end if;
+
+  total_days := greatest(1, (return_date - start_date));
+  total_label := total_days || ' hari × ' || count_inserted || ' unit';
+
+  -- Build the per-unit breakdown using the freshly-inserted rows so we have
+  -- the resolved asset / category names.
+  with inserted as (
+    select b.id, a.name as asset_name, a.serial_number, e.name as cat_name
+    from public.bookings b
+    left join public.assets a on a.id = b.resource_id
+    left join public.equipment e on e.id = a.resource_id
+    where b.id in (select r->>'id' from jsonb_array_elements(rows) as r)
+      and b.created_at = bulk_loan_assets.created_at
+  )
+  select string_agg(
+    '• <b>' || coalesce(asset_name, 'unit') || '</b>'
+    || coalesce(' <i>(' || cat_name || ')</i>', '')
+    || coalesce(E'\n  <code>' || serial_number || '</code>', ''),
+    E'\n'
+    order by asset_name
+  )
+  into lines
+  from inserted;
+
+  msg := '📦📦 <b>Pinjaman Pukal ICT</b>' || E'\n'
+      || '<i>' || count_inserted || ' unit dipinjam oleh ' || by_user_name || '</i>' || E'\n'
+      || '📅 Pinjam: <b>' || start_date::text || '</b> → Kembali: <b>' || return_date::text || '</b>'
+      || ' <i>(' || total_label || ')</i>' || E'\n'
+      || coalesce(E'📝 <i>' || purpose || '</i>' || E'\n', '')
+      || E'\n' || lines
+      || E'\n\n🔗 https://tempah.altrabird.click';
+
+  perform public.tg_send(msg);
+  return count_inserted;
+end;
+$$;
+
+grant execute on function public.bulk_loan_assets(jsonb, text, text, date, date, time, time, text, timestamptz) to anon, authenticated;
 
 -- ---------------------------------------------------------------------------
 -- 3c. Trigger: notify when status transitions INTO 'cancelled'

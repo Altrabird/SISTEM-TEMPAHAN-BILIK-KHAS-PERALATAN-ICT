@@ -290,6 +290,43 @@ export async function bulkReturnLoansInCloud(
   return { ok: true, updated: typeof data === 'number' ? data : Number(data) || 0 };
 }
 
+/**
+ * Insert many ICT loan bookings in a single round-trip. The Supabase RPC
+ * suppresses per-row Telegram notifications and emits ONE consolidated
+ * digest message instead, so the group chat doesn't get flooded.
+ *
+ * Returns the count actually inserted.
+ */
+export async function bulkLoanAssetsInCloud(
+  bookings: Booking[],
+  byUserId: string,
+  byUserName: string,
+): Promise<{ ok: boolean; inserted: number; error?: string }> {
+  if (!isSupabaseEnabled || !supabase) {
+    return { ok: false, inserted: 0, error: 'Supabase belum dikonfig.' };
+  }
+  if (bookings.length === 0) {
+    return { ok: true, inserted: 0 };
+  }
+  // All rows in a bulk loan share these fields — we send shared params once
+  // and pass the per-row variables (id, resource_id) as a jsonb array.
+  const first = bookings[0];
+  const rows = bookings.map((b) => ({ id: b.id, resource_id: b.resourceId }));
+  const { data, error } = await supabase.rpc('bulk_loan_assets', {
+    rows,
+    by_user_id: byUserId,
+    by_user_name: byUserName,
+    start_date: first.date,
+    return_date: first.returnDate ?? first.date,
+    start_time: first.startTime,
+    end_time: first.endTime,
+    purpose: first.purpose,
+    created_at: new Date(first.createdAt).toISOString(),
+  });
+  if (error) return { ok: false, inserted: 0, error: error.message };
+  return { ok: true, inserted: typeof data === 'number' ? data : Number(data) || 0 };
+}
+
 /** Update an existing booking row (e.g., return logging, cancellation). */
 export async function updateBookingInCloud(booking: Booking): Promise<{ ok: boolean; error?: string }> {
   if (!isSupabaseEnabled || !supabase) {

@@ -19,6 +19,7 @@ import {
   fetchBookingsFromCloud,
   updateBookingInCloud,
   bulkReturnLoansInCloud,
+  bulkLoanAssetsInCloud,
 } from './lib/storage';
 import { isAssetLocked, isResourceLocked, lockReasonOf } from './lib/locks';
 import { isSupabaseEnabled } from './lib/supabase';
@@ -275,6 +276,10 @@ export default function App() {
     }
 
     const now = Date.now();
+    // Every row shares the same createdAt so the SQL RPC can correlate the
+    // freshly-inserted rows for its digest. The per-row id keeps optimistic
+    // local state keys stable.
+    const sharedCreatedAt = now;
     const newBookings: Booking[] = input.assets.map((asset, i) => ({
       id: `loan-${now}-${i}-${Math.random().toString(36).slice(2, 6)}`,
       resourceId: asset.id,
@@ -287,10 +292,17 @@ export default function App() {
       endTime: '17:00',
       purpose: `${input.purpose} [PUKAL ×${input.assets.length}]`,
       status: 'confirmed' as const,
-      createdAt: now + i,
+      createdAt: sharedCreatedAt,
     }));
     setBookings((prev) => [...newBookings, ...prev]);
-    newBookings.forEach((b) => void syncBookingToCloud(b));
+    // Single round-trip → ONE consolidated Telegram digest instead of N
+    // per-row "Pinjaman ICT Baharu" messages. Falls back to per-row sync
+    // when Supabase isn't configured (local-only mode).
+    if (isSupabaseEnabled) {
+      void bulkLoanAssetsInCloud(newBookings, profile.id, profile.name);
+    } else {
+      newBookings.forEach((b) => void syncBookingToCloud(b));
+    }
     updateLastActive();
     return null;
   };
