@@ -17,6 +17,10 @@ Major milestones for the TEMPAH project.
 - Admin can cancel any booking (not only their own); cancellation
   attribution is recorded in cancelled_at, cancelled_by_id/name,
   cancel_reason columns
+- Pemulangan Pukal: select-multiple in MyLoansView + single Supabase
+  RPC call (bulk_return_loans) that updates all rows AND sends ONE
+  consolidated Telegram digest. Per-row return trigger is suppressed
+  during the bulk via tempah.suppress_return_notify session config.
 - Pure SQL implementation — no edge functions needed:
   - `pg_net` for async HTTP from Postgres
   - `pg_cron` for daily schedule

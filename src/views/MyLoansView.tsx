@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { motion } from 'motion/react';
 import {
   PackageCheck, Calendar, Clock, AlertTriangle, Search,
-  Laptop, ArrowRight, Filter, Sparkles,
+  Laptop, ArrowRight, Filter, Sparkles, CheckSquare, Square,
 } from 'lucide-react';
 import { Asset, Booking, Profile, Resource } from '../types';
 import { todayLocalISO, daysBetween } from '../lib/dates';
@@ -13,14 +13,30 @@ interface Props {
   assets: Asset[];
   equipment: Resource[];
   onReturn: (booking: Booking) => void;
+  onBulkReturn?: (
+    items: { booking: Booking; asset?: Asset; category?: Resource }[],
+  ) => void;
   onNewLoan: () => void;
 }
 
 type FilterMode = 'active' | 'history' | 'all';
 
-export function MyLoansView({ profile, bookings, assets, equipment, onReturn, onNewLoan }: Props) {
+export function MyLoansView({ profile, bookings, assets, equipment, onReturn, onBulkReturn, onNewLoan }: Props) {
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<FilterMode>('active');
+  const [selectMode, setSelectMode] = useState(false);
+  const [picked, setPicked] = useState<Set<string>>(new Set());
+
+  // Reset selection when leaving active filter or toggling off select mode
+  useEffect(() => {
+    if (filter !== 'active') {
+      setSelectMode(false);
+      setPicked(new Set());
+    }
+  }, [filter]);
+  useEffect(() => {
+    if (!selectMode) setPicked(new Set());
+  }, [selectMode]);
 
   const today = todayLocalISO();
 
@@ -173,6 +189,62 @@ export function MyLoansView({ profile, bookings, assets, equipment, onReturn, on
                 className="w-full pl-9 pr-4 py-2.5 rounded-lg border border-slate-200 text-sm font-medium focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/10 outline-none transition-all"
               />
             </div>
+
+            {/* Bulk return controls (only on Aktif filter, only when onBulkReturn provided) */}
+            {filter === 'active' && counters.active > 0 && onBulkReturn && (
+              <div className="flex items-center justify-between gap-2 flex-wrap pt-1">
+                <button
+                  onClick={() => setSelectMode((v) => !v)}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-widest transition-all border ${
+                    selectMode
+                      ? 'bg-emerald-50 text-emerald-700 border-emerald-300'
+                      : 'bg-white text-slate-600 border-slate-200 hover:border-emerald-400 hover:text-emerald-600'
+                  }`}
+                >
+                  {selectMode ? <CheckSquare size={12} /> : <Square size={12} />}
+                  {selectMode ? 'Batal Pilih' : 'Pilih untuk Pulangkan Pukal'}
+                </button>
+                {selectMode && (
+                  <div className="flex items-center gap-1.5 ml-auto">
+                    <button
+                      onClick={() => {
+                        // Select all currently visible active items
+                        const activeIds = filtered
+                          .filter((b) => b.status !== 'returned')
+                          .map((b) => b.id);
+                        const allPicked = activeIds.every((id) => picked.has(id));
+                        setPicked(allPicked ? new Set() : new Set(activeIds));
+                      }}
+                      className="text-[10px] font-bold uppercase tracking-widest text-slate-600 hover:text-emerald-700 px-2 py-1.5"
+                    >
+                      {filtered.filter((b) => b.status !== 'returned').every((b) => picked.has(b.id))
+                        ? 'Buang Semua'
+                        : 'Pilih Semua'}
+                    </button>
+                    <button
+                      disabled={picked.size === 0}
+                      onClick={() => {
+                        const items = Array.from(picked)
+                          .map((id) => {
+                            const booking = bookings.find((b) => b.id === id);
+                            if (!booking) return null;
+                            const asset = assets.find((a) => a.id === booking.resourceId);
+                            const category = asset
+                              ? equipment.find((e) => e.id === asset.resourceId) ?? undefined
+                              : undefined;
+                            return { booking, asset, category };
+                          })
+                          .filter(Boolean) as { booking: Booking; asset?: Asset; category?: Resource }[];
+                        onBulkReturn(items);
+                      }}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-widest text-white bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-600 hover:to-green-700 transition-all shadow-md shadow-emerald-500/30 disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      <PackageCheck size={12} /> Pulangkan {picked.size > 0 ? `(${picked.size})` : ''}
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           <div className="divide-y divide-slate-100">
@@ -188,14 +260,41 @@ export function MyLoansView({ profile, bookings, assets, equipment, onReturn, on
               const overdue = b.status !== 'returned' && expectedReturn < today;
               const overdueDays = overdue ? daysBetween(expectedReturn, today) : 0;
               const isReturned = b.status === 'returned';
+              const isPicked = picked.has(b.id);
+              const showCheckbox = selectMode && !isReturned;
               return (
                 <div
                   key={b.id}
                   className={`p-4 md:p-5 transition-colors ${
-                    isReturned ? 'bg-emerald-50/30' : overdue ? 'bg-rose-50/30' : 'hover:bg-slate-50'
+                    isPicked ? 'bg-emerald-50' :
+                    isReturned ? 'bg-emerald-50/30' :
+                    overdue ? 'bg-rose-50/30' :
+                    selectMode ? 'hover:bg-emerald-50/40 cursor-pointer' :
+                    'hover:bg-slate-50'
                   }`}
+                  onClick={
+                    showCheckbox
+                      ? () => {
+                          setPicked((prev) => {
+                            const next = new Set(prev);
+                            if (next.has(b.id)) next.delete(b.id);
+                            else next.add(b.id);
+                            return next;
+                          });
+                        }
+                      : undefined
+                  }
                 >
                   <div className="flex items-start gap-3">
+                    {showCheckbox && (
+                      <div className="pt-1 shrink-0">
+                        {isPicked ? (
+                          <CheckSquare size={20} className="text-emerald-600" />
+                        ) : (
+                          <Square size={20} className="text-slate-400" />
+                        )}
+                      </div>
+                    )}
                     {asset?.imageUrl ? (
                       <img
                         src={asset.imageUrl}
@@ -263,10 +362,10 @@ export function MyLoansView({ profile, bookings, assets, equipment, onReturn, on
                         </p>
                       )}
 
-                      {!isReturned && (
+                      {!isReturned && !selectMode && (
                         <div className="flex gap-2 mt-3 flex-wrap">
                           <button
-                            onClick={() => onReturn(b)}
+                            onClick={(e) => { e.stopPropagation(); onReturn(b); }}
                             className="flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-emerald-500 to-green-600 text-white text-[10px] font-bold uppercase tracking-widest rounded-lg hover:from-emerald-600 hover:to-green-700 transition-all shadow-md shadow-emerald-500/30 active:scale-95"
                           >
                             <PackageCheck size={12} /> Pulangkan Sekarang

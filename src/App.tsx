@@ -18,6 +18,7 @@ import {
   deleteAssetFromCloud,
   fetchBookingsFromCloud,
   updateBookingInCloud,
+  bulkReturnLoansInCloud,
 } from './lib/storage';
 import { isAssetLocked, isResourceLocked, lockReasonOf } from './lib/locks';
 import { isSupabaseEnabled } from './lib/supabase';
@@ -45,6 +46,7 @@ import { LockAssetModal } from './components/LockAssetModal';
 import { EditAssetModal } from './components/EditAssetModal';
 import { BulkAssetActionsModal, BulkAction } from './components/BulkAssetActionsModal';
 import { ReturnLoanModal } from './components/ReturnLoanModal';
+import { BulkReturnModal } from './components/BulkReturnModal';
 import { PWAUpdatePrompt } from './components/PWAUpdatePrompt';
 
 type View = 'dashboard' | 'portfolio' | 'bookings' | 'rooms' | 'equipment' | 'returns' | 'admin' | 'reports' | 'loans' | 'settings';
@@ -78,6 +80,7 @@ export default function App() {
   const [editingAsset, setEditingAsset] = useState<Asset | null>(null);
   const [showBulkAssetActions, setShowBulkAssetActions] = useState(false);
   const [returningLoan, setReturningLoan] = useState<{ booking: Booking; asset: Asset | null } | null>(null);
+  const [bulkReturnItems, setBulkReturnItems] = useState<{ booking: Booking; asset?: Asset; category?: Resource }[] | null>(null);
 
   useEffect(() => {
     setRooms(localStore.getRooms(INITIAL_ROOMS));
@@ -325,6 +328,32 @@ export default function App() {
     };
     setBookings((prev) => prev.map((b) => (b.id === booking.id ? updated : b)));
     void updateBookingInCloud(updated);
+  };
+
+  /** Mark many loans as returned in one shot (Pemulangan Pukal). The cloud
+   *  helper sends ONE consolidated Telegram message instead of N individual
+   *  notifications. Returns the number actually marked. */
+  const bulkMarkLoansReturned = async (loanIds: string[], notes: string): Promise<number> => {
+    if (!profile || loanIds.length === 0) return 0;
+    const ts = Date.now();
+    const trimmedNotes = notes.trim();
+    // Optimistic local update — flip them all to returned right away
+    setBookings((prev) =>
+      prev.map((b) =>
+        loanIds.includes(b.id) && b.status === 'confirmed'
+          ? {
+              ...b,
+              status: 'returned' as const,
+              returnedAt: ts,
+              returnedById: profile.id,
+              returnedByName: profile.name,
+              returnNotes: trimmedNotes || undefined,
+            }
+          : b,
+      ),
+    );
+    const r = await bulkReturnLoansInCloud(loanIds, profile.id, profile.name, trimmedNotes || undefined);
+    return r.updated;
   };
 
   const saveResource = (r: Resource) => {
@@ -666,6 +695,7 @@ export default function App() {
                     const asset = assets.find((a) => a.id === booking.resourceId) ?? null;
                     setReturningLoan({ booking, asset });
                   }}
+                  onBulkReturn={(items) => setBulkReturnItems(items)}
                   onNewLoan={() => setActiveView('equipment')}
                 />
               )}
@@ -888,6 +918,16 @@ export default function App() {
         onConfirm={(b, notes) => {
           markLoanReturned(b, notes);
           setReturningLoan(null);
+        }}
+      />
+
+      <BulkReturnModal
+        open={bulkReturnItems !== null}
+        items={bulkReturnItems ?? []}
+        onClose={() => setBulkReturnItems(null)}
+        onConfirm={async (notes) => {
+          const ids = (bulkReturnItems ?? []).map((i) => i.booking.id);
+          return await bulkMarkLoansReturned(ids, notes);
         }}
       />
 

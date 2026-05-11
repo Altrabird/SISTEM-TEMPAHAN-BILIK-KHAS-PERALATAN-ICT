@@ -260,6 +260,36 @@ export async function syncBookingToCloud(booking: Booking): Promise<{ ok: boolea
   return { ok: true };
 }
 
+/**
+ * Mark many ICT loans as returned in a single round-trip. The Supabase RPC
+ * suppresses per-row Telegram notifications and emits ONE consolidated
+ * digest message instead, so the group chat doesn't get flooded.
+ *
+ * Returns the count actually updated (already-returned ones are skipped
+ * server-side).
+ */
+export async function bulkReturnLoansInCloud(
+  loanIds: string[],
+  byId: string,
+  byName: string,
+  notes?: string,
+): Promise<{ ok: boolean; updated: number; error?: string }> {
+  if (!isSupabaseEnabled || !supabase) {
+    return { ok: false, updated: 0, error: 'Supabase belum dikonfig.' };
+  }
+  if (loanIds.length === 0) {
+    return { ok: true, updated: 0 };
+  }
+  const { data, error } = await supabase.rpc('bulk_return_loans', {
+    loan_ids: loanIds,
+    by_id: byId,
+    by_name: byName,
+    notes: notes ?? null,
+  });
+  if (error) return { ok: false, updated: 0, error: error.message };
+  return { ok: true, updated: typeof data === 'number' ? data : Number(data) || 0 };
+}
+
 /** Update an existing booking row (e.g., return logging, cancellation). */
 export async function updateBookingInCloud(booking: Booking): Promise<{ ok: boolean; error?: string }> {
   if (!isSupabaseEnabled || !supabase) {

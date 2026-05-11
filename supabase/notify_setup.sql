@@ -165,8 +165,15 @@ declare
   status_label text;
   status_emoji text;
   recorder text;
+  suppress text;
 begin
   if not (new.status = 'returned' and (old.status is distinct from 'returned')) then
+    return new;
+  end if;
+
+  -- Bulk return uses a session-local config to bypass per-row notifications
+  suppress := current_setting('tempah.suppress_return_notify', true);
+  if suppress = 'on' then
     return new;
   end if;
 
@@ -231,6 +238,84 @@ after update of status on public.bookings
 for each row
 when (new.status = 'returned' and old.status is distinct from 'returned')
 execute function public.notify_return_telegram();
+
+-- ---------------------------------------------------------------------------
+-- 3b'. Bulk return RPC — update N bookings + send ONE Telegram digest.
+--      Suppresses the per-row return trigger via session config flag.
+-- ---------------------------------------------------------------------------
+create or replace function public.bulk_return_loans(
+  loan_ids text[],
+  by_id text,
+  by_name text,
+  notes text default null
+)
+returns int
+language plpgsql
+security definer
+set search_path = public, extensions
+as $$
+declare
+  count_updated int;
+  lines text;
+  msg text;
+  ts timestamptz := now();
+  today_my date := (ts at time zone 'Asia/Kuala_Lumpur')::date;
+begin
+  perform set_config('tempah.suppress_return_notify', 'on', true);
+
+  update public.bookings
+  set
+    status = 'returned',
+    returned_at = ts,
+    returned_by_id = by_id,
+    returned_by_name = by_name,
+    return_notes = nullif(notes, '')
+  where id = any(loan_ids)
+    and status = 'confirmed';
+  get diagnostics count_updated = row_count;
+
+  if count_updated = 0 then
+    return 0;
+  end if;
+
+  with returned as (
+    select b.id, b.user_name, coalesce(b.return_date, b.date) as ret,
+           a.name as asset_name, a.serial_number, e.name as cat_name
+    from public.bookings b
+    left join public.assets a on a.id = b.resource_id
+    left join public.equipment e on e.id = a.resource_id
+    where b.id = any(loan_ids)
+      and b.status = 'returned'
+      and b.returned_at = ts
+  )
+  select string_agg(
+    '• <b>' || coalesce(asset_name, 'unit') || '</b>'
+    || coalesce(' <i>(' || cat_name || ')</i>', '')
+    || coalesce(E'\n  <code>' || serial_number || '</code>', '')
+    || E'\n  Peminjam: ' || user_name
+    || ' · patut kembali ' || ret::text
+    || (case when (today_my - ret) < 0 then ' (awal ' || abs(today_my - ret) || 'h)'
+             when (today_my - ret) = 0 then ' (tepat)'
+             else ' (lewat ' || (today_my - ret) || 'h)' end),
+    E'\n\n'
+    order by asset_name
+  )
+  into lines
+  from returned;
+
+  msg := '📦📦 <b>Pemulangan Pukal ICT</b>' || E'\n'
+      || '<i>' || count_updated || ' unit dipulangkan oleh ' || by_name
+      || ' pada ' || today_my::text || '</i>' || E'\n\n'
+      || lines
+      || coalesce(E'\n\n📝 Nota: <i>' || notes || '</i>', '')
+      || E'\n\n🔗 https://tempah.altrabird.click';
+
+  perform public.tg_send(msg);
+  return count_updated;
+end;
+$$;
+
+grant execute on function public.bulk_return_loans(text[], text, text, text) to anon, authenticated;
 
 -- ---------------------------------------------------------------------------
 -- 3c. Trigger: notify when status transitions INTO 'cancelled'
