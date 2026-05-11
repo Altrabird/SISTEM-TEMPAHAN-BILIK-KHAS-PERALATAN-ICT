@@ -2,7 +2,27 @@
 
 Major milestones for the TEMPAH project.
 
-## v1.4.0 — Pemulangan + PWA Edition (current)
+## v1.5.0 — Telegram Notifications (current)
+
+### Major
+- Telegram bot integration ("Tempah@SKBT") posting to a group/channel
+- Instant notification on every booking INSERT (rooms + ICT loans)
+- Daily 08:00 MY digest of overdue ICT loans + ESOK-due reminders
+- Pure SQL implementation — no edge functions needed:
+  - `pg_net` for async HTTP from Postgres
+  - `pg_cron` for daily schedule
+  - Supabase Vault for encrypted bot-token + chat-id storage
+  - `tg_send(text)` helper, `notify_booking_telegram()` trigger,
+    `tg_remind_overdue_loans()` cron callback
+
+### Notes
+- Trigger fires server-side on the DB row, so it catches bookings made
+  via the app, direct SQL, or any future client — single source of truth.
+- Notifications fail silently (warning only) — never block a booking save.
+
+---
+
+## v1.4.0 — Pemulangan + PWA Edition
 
 **Live on `tempah.altrabird.click`. First user-facing milestone.**
 

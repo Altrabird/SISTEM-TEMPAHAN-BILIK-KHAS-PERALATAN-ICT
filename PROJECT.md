@@ -97,7 +97,8 @@ deploy/
 └── README.md                  Setup + recovery (BM)
 
 supabase/
-└── schema.sql                 Idempotent — re-runnable
+├── schema.sql                 Idempotent — re-runnable
+└── notify_setup.sql           Telegram trigger + cron + Vault setup
 
 public/
 ├── logo.svg                   Single source for PWA icons
@@ -258,6 +259,10 @@ certbot --nginx -d tempah.altrabird.click
 - ✅ PWA: installable, offline app shell, auto-update prompt
 - ✅ Supabase as source of truth (rooms, equipment, assets, bookings, profiles all sync)
 - ✅ Production deploy on VPS w/ HTTPS
+- ✅ Telegram notifications: instant on every booking + daily reminder
+  for overdue / due-tomorrow ICT loans (pure SQL via pg_net + pg_cron;
+  bot token in Vault; trigger lives in DB so it fires for any source
+  including direct SQL inserts)
 
 ---
 
@@ -265,7 +270,7 @@ certbot --nginx -d tempah.altrabird.click
 
 1. **Auth (Supabase Auth + magic link)** — only when going public outside school
 2. **Auto-deploy via GitHub Actions** — kill the PowerShell ssh step
-3. **Email/Telegram notification** — overdue loan reminder to borrower (24h before)
+3. **Per-user Telegram opt-in** — borrowers link their own chat, get private DM
 4. **Slot-based room calendar view** — visual week grid for room availability
 5. **Year-end archive** — bulk-export bookings to PDF/CSV by year
 6. **Receipt mode** — borrower types own loan slip number from physical paper for offline-first
