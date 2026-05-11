@@ -388,6 +388,13 @@ export async function fetchProfilesFromCloud(): Promise<Profile[] | null> {
   }));
 }
 
+/** Postgres `time` columns come back as HH:MM:SS — trim the seconds so
+ *  display strings match the optimistic local state (always HH:MM). */
+function normalizeTime(t: string | null | undefined): string {
+  if (!t) return '';
+  return t.length >= 5 ? t.slice(0, 5) : t;
+}
+
 export async function fetchBookingsFromCloud(): Promise<Booking[] | null> {
   if (!isSupabaseEnabled || !supabase) return null;
   const { data, error } = await supabase.from('bookings').select('*').order('created_at', { ascending: false });
@@ -400,8 +407,8 @@ export async function fetchBookingsFromCloud(): Promise<Booking[] | null> {
     userName: row.user_name,
     date: row.date,
     returnDate: row.return_date ?? undefined,
-    startTime: row.start_time,
-    endTime: row.end_time,
+    startTime: normalizeTime(row.start_time),
+    endTime: normalizeTime(row.end_time),
     purpose: row.purpose,
     status: row.status,
     createdAt: new Date(row.created_at).getTime(),

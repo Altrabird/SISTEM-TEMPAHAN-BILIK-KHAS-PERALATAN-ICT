@@ -1,11 +1,31 @@
 import React from 'react';
 import { motion } from 'motion/react';
 import {
-  DoorOpen, Laptop, Clock, CheckCircle2, Info, AlertCircle, TrendingUp, CalendarDays
+  DoorOpen, Laptop, Clock, CheckCircle2, Info, AlertCircle, TrendingUp, CalendarDays,
+  PackageCheck
 } from 'lucide-react';
 import { Asset, Booking, Resource, Profile } from '../types';
-import { todayLocalISO } from '../lib/dates';
+import { todayLocalISO, formatLocalISO, daysBetween } from '../lib/dates';
 import { resolveResourceName } from '../lib/resources';
+
+/**
+ * Returned-loan status summary used in the "Tempahan Hari Ini" card.
+ * - `tone` drives the badge / border colour
+ * - `label` is the short status (Pulang TEPAT / AWAL X hari / LEWAT X hari)
+ * - `whenLabel` is the actual return date in YYYY-MM-DD local time
+ */
+function getReturnInfo(b: Booking): { tone: 'good' | 'warn'; label: string; whenLabel: string; by?: string } | null {
+  if (b.status !== 'returned' || !b.returnedAt) return null;
+  const expected = b.returnDate ?? b.date;
+  const whenLabel = formatLocalISO(new Date(b.returnedAt));
+  const diff = daysBetween(expected, whenLabel);
+  let tone: 'good' | 'warn';
+  let label: string;
+  if (diff < 0) { tone = 'good'; label = `Pulang AWAL ${Math.abs(diff)} hari`; }
+  else if (diff === 0) { tone = 'good'; label = 'Pulang TEPAT pada masa'; }
+  else { tone = 'warn'; label = `Pulang LEWAT ${diff} hari`; }
+  return { tone, label, whenLabel, by: b.returnedByName };
+}
 
 interface Props {
   bookings: Booking[];
@@ -146,26 +166,48 @@ export function DashboardView({ bookings, rooms, equipment, assets, profile, onO
 
           {todayBookings.length > 0 ? (
             <div className="space-y-3">
-              {todayBookings.map((b) => (
-                <div key={b.id} className="bg-white p-4 rounded-xl border-l-4 border-l-blue-600 border border-slate-200 flex items-center justify-between group hover:shadow-md transition-all">
-                  <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 bg-slate-50 rounded-lg flex flex-col items-center justify-center border border-slate-100 shrink-0">
-                      <span className="text-[10px] font-bold text-slate-400 leading-none">MULA</span>
-                      <span className="text-xs font-bold text-blue-600">{b.startTime}</span>
+              {todayBookings.map((b) => {
+                const ret = getReturnInfo(b);
+                const isReturned = ret !== null;
+                const borderColor = isReturned ? 'border-l-emerald-500' : 'border-l-blue-600';
+                const timePillBg = isReturned ? 'bg-emerald-50 border-emerald-100' : 'bg-slate-50 border-slate-100';
+                const timePillLabel = isReturned ? 'PULANG' : 'MULA';
+                const timePillText = isReturned ? 'text-emerald-600' : 'text-blue-600';
+                return (
+                  <div key={b.id} className={`bg-white p-4 rounded-xl border-l-4 ${borderColor} border border-slate-200 flex items-center justify-between gap-3 group hover:shadow-md transition-all`}>
+                    <div className="flex items-center gap-4 min-w-0">
+                      <div className={`w-12 h-12 rounded-lg flex flex-col items-center justify-center border shrink-0 ${timePillBg}`}>
+                        <span className="text-[10px] font-bold text-slate-400 leading-none">{timePillLabel}</span>
+                        <span className={`text-xs font-bold ${timePillText}`}>{b.startTime}</span>
+                      </div>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <p className="font-bold text-sm text-slate-800 truncate">
+                            {resolveResourceName(b.resourceId, rooms, equipment, assets)}
+                          </p>
+                          {isReturned && (
+                            <span className="text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-100 flex items-center gap-1">
+                              <PackageCheck size={10} /> Dipulangkan
+                            </span>
+                          )}
+                        </div>
+                        {isReturned ? (
+                          <p className={`text-[11px] font-medium leading-relaxed ${ret.tone === 'good' ? 'text-emerald-600' : 'text-amber-600'}`}>
+                            {ret.label} · {ret.whenLabel}
+                            {ret.by ? <span className="text-slate-400"> · oleh {ret.by}</span> : null}
+                          </p>
+                        ) : (
+                          <p className="text-[11px] text-slate-500 font-medium leading-relaxed">{b.purpose}</p>
+                        )}
+                      </div>
                     </div>
-                    <div>
-                      <p className="font-bold text-sm text-slate-800">
-                        {resolveResourceName(b.resourceId, rooms, equipment, assets)}
-                      </p>
-                      <p className="text-[11px] text-slate-500 font-medium leading-relaxed">{b.purpose}</p>
+                    <div className="text-right shrink-0">
+                      <p className="text-xs font-bold text-slate-700">{b.userName}</p>
+                      <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mt-0.5">{b.startTime} - {b.endTime}</p>
                     </div>
                   </div>
-                  <div className="text-right shrink-0">
-                    <p className="text-xs font-bold text-slate-700">{b.userName}</p>
-                    <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mt-0.5">{b.startTime} - {b.endTime}</p>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           ) : (
             <div className="bg-white border border-slate-200 border-dashed rounded-2xl p-12 text-center">
