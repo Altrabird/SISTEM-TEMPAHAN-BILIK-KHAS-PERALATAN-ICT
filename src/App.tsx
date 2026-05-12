@@ -52,6 +52,7 @@ import { BulkReturnModal } from './components/BulkReturnModal';
 import { PWAUpdatePrompt } from './components/PWAUpdatePrompt';
 import { QRScannerModal, parseScannedId } from './components/QRScannerModal';
 import { ScannedActionSheet } from './components/ScannedActionSheet';
+import { DraggableScanFab } from './components/DraggableScanFab';
 
 type View = 'dashboard' | 'portfolio' | 'bookings' | 'rooms' | 'equipment' | 'returns' | 'admin' | 'reports' | 'loans' | 'settings';
 
@@ -1008,17 +1009,8 @@ export default function App() {
         }}
       />
 
-      {/* Mobile-only FAB: Imbas QR — floats above the bottom nav */}
-      {profile && (
-        <button
-          onClick={() => setShowScanner(true)}
-          className="md:hidden fixed right-4 bottom-20 z-30 w-14 h-14 rounded-full bg-gradient-to-br from-purple-600 to-pink-600 text-white shadow-xl shadow-purple-500/40 flex items-center justify-center active:scale-95 transition-transform"
-          title="Imbas kod QR"
-          aria-label="Imbas kod QR"
-        >
-          <QrCode size={22} />
-        </button>
-      )}
+      {/* Mobile-only FAB: Imbas QR — long-press to drag anywhere */}
+      {profile && <DraggableScanFab onClick={() => setShowScanner(true)} />}
 
       {/* Mobile bottom navigation — only visible < md */}
       {profile && (
