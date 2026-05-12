@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import {
   LayoutDashboard, CalendarDays, DoorOpen, Laptop, Settings,
-  Plus, Menu, X, UserCircle2, Sparkles, Shield, LogOut, FileText, PackageCheck
+  Plus, Menu, X, UserCircle2, Sparkles, Shield, LogOut, FileText, PackageCheck,
+  QrCode
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { INITIAL_ROOMS, INITIAL_EQUIPMENT, INITIAL_ASSETS, ROLE_LABELS } from './constants';
@@ -49,6 +50,8 @@ import { BulkAssetActionsModal, BulkAction } from './components/BulkAssetActions
 import { ReturnLoanModal } from './components/ReturnLoanModal';
 import { BulkReturnModal } from './components/BulkReturnModal';
 import { PWAUpdatePrompt } from './components/PWAUpdatePrompt';
+import { QRScannerModal, parseScannedId } from './components/QRScannerModal';
+import { ScannedActionSheet } from './components/ScannedActionSheet';
 
 type View = 'dashboard' | 'portfolio' | 'bookings' | 'rooms' | 'equipment' | 'returns' | 'admin' | 'reports' | 'loans' | 'settings';
 
@@ -82,6 +85,8 @@ export default function App() {
   const [showBulkAssetActions, setShowBulkAssetActions] = useState(false);
   const [returningLoan, setReturningLoan] = useState<{ booking: Booking; asset: Asset | null } | null>(null);
   const [bulkReturnItems, setBulkReturnItems] = useState<{ booking: Booking; asset?: Asset; category?: Resource }[] | null>(null);
+  const [showScanner, setShowScanner] = useState(false);
+  const [scannedId, setScannedId] = useState<string | null>(null);
 
   useEffect(() => {
     setRooms(localStore.getRooms(INITIAL_ROOMS));
@@ -427,6 +432,16 @@ export default function App() {
     setShowBookingModal(true);
   };
 
+  /** Called when QRScannerModal successfully decodes a code. Parses the
+   *  payload into a known id (ast-X / room-X) and hands off to the
+   *  ScannedActionSheet which decides what to do based on the id's state. */
+  const handleScanResult = (raw: string) => {
+    const id = parseScannedId(raw);
+    setShowScanner(false);
+    if (!id) return;
+    setScannedId(id);
+  };
+
   const isAdmin = profile?.role === 'admin';
 
   const navItems = [
@@ -612,6 +627,14 @@ export default function App() {
                   <span className="text-[10px] font-bold text-slate-500 uppercase tracking-tight">Ditempah</span>
                 </div>
               </div>
+              {/* Desktop-only: Imbas QR button — mobile uses the FAB instead */}
+              <button
+                onClick={() => setShowScanner(true)}
+                className="hidden md:flex bg-purple-50 hover:bg-purple-100 text-purple-700 px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wide items-center gap-2 transition-all shadow-sm active:scale-95"
+                title="Imbas kod QR"
+              >
+                <QrCode size={14} /> Imbas QR
+              </button>
               <button
                 onClick={() => openBookingModal()}
                 className="bg-white md:bg-blue-600 text-blue-700 md:text-white px-3 md:px-5 py-2 rounded-lg text-xs font-bold uppercase tracking-wide flex items-center gap-1.5 md:gap-2 hover:bg-blue-50 md:hover:bg-blue-700 transition-all shadow-sm md:shadow-md md:shadow-blue-500/20 active:scale-95"
@@ -949,6 +972,53 @@ export default function App() {
       />
 
       <PWAUpdatePrompt />
+
+      <QRScannerModal
+        open={showScanner}
+        onScan={handleScanResult}
+        onClose={() => setShowScanner(false)}
+      />
+
+      <ScannedActionSheet
+        open={scannedId !== null}
+        scannedId={scannedId}
+        assets={assets}
+        rooms={rooms}
+        equipment={equipment}
+        bookings={bookings}
+        profile={profile}
+        isAdmin={isAdmin}
+        onClose={() => setScannedId(null)}
+        onLoan={(asset) => {
+          setScannedId(null);
+          setLoanFromQr(true);
+          setLoanAsset(asset);
+        }}
+        onReturn={(booking, asset) => {
+          setScannedId(null);
+          setReturningLoan({ booking, asset });
+        }}
+        onBookRoom={(room) => {
+          setScannedId(null);
+          openBookingModal({ resourceId: room.id, resourceType: 'room' });
+        }}
+        onScanAgain={() => {
+          setScannedId(null);
+          setShowScanner(true);
+        }}
+      />
+
+      {/* Mobile-only FAB: Imbas QR — floats above the bottom nav */}
+      {profile && (
+        <button
+          onClick={() => setShowScanner(true)}
+          className="md:hidden fixed right-4 bottom-20 z-30 w-14 h-14 rounded-full bg-gradient-to-br from-purple-600 to-pink-600 text-white shadow-xl shadow-purple-500/40 flex items-center justify-center active:scale-95 transition-transform"
+          title="Imbas kod QR"
+          aria-label="Imbas kod QR"
+        >
+          <QrCode size={22} />
+        </button>
+      )}
 
       {/* Mobile bottom navigation — only visible < md */}
       {profile && (
