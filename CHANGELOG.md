@@ -2,7 +2,159 @@
 
 Major milestones for the TEMPAH project.
 
-## v1.6.0 — Telegram Notifications + Bulk Workflows (current)
+## v1.7.0 — In-App QR Scanner, Room QR, New Brand Identity (current)
+
+**Scan-driven booking is now a first-class flow on both sides — ICT
+loans AND Bilik Khas. Brand identity refreshed with a new TEMPAH logo
+applied across every install surface and in-app brand chip. Bulk loan
+joins bulk return in emitting a single Telegram digest. Several
+high-friction UI bugs ironed out.**
+
+### In-app QR scanner (new)
+
+| Piece | What it does |
+|---|---|
+| `QRScannerModal` | html5-qrcode camera view + front/back toggle + manual-entry fallback when permission denied or sticker damaged |
+| `ScannedActionSheet` | After decode, resolves the id and shows context-aware actions — **Pinjam Sekarang** / **Pulangkan Sekarang** / **Rekod Pemulangan (Admin)** / **Tempah Bilik Ini** / lock warnings / "asset on loan to X" — so one tap = right place |
+| `ScanFab` | Mobile-only floating button bottom-right, two pulsing halo rings + spring-in mount, first-visit instruction tooltip that auto-dismisses after 7s |
+| Desktop scan button | Pill in the header bar next to "Tempahan Baru" |
+| `parseScannedId` | Forgiving parser — accepts full URLs (`?loan=ast-X`, `?book=room-X`), bare ids, or raw typed text |
+
+The action sheet has 7+ branches by resolved state (available asset,
+loan-to-me, loan-to-others-as-admin, loan-to-others-as-user, locked,
+damaged, room, unknown id) so the user is never asked "what do you
+want to do?" when the answer is obvious from context.
+
+A short detour to make the FAB draggable was rolled back — on
+mid-range Android the per-frame React reconciliation made the button
+stutter, and the fixed glowing version was a better trade-off than
+a drag that stuck. Halo rings replaced "discoverable" with "obvious".
+
+### Room QR codes (new)
+
+`QRCodeModal` refactored to accept a discriminated `target` prop
+(`asset | room`). Same UI shell, kind-specific labels and sticker
+copy. Each Bilik Khas now has an admin-only QR button (next to the
+edit pencil) that prints/downloads a sticker encoding
+`?book=room-X` — scan from outside the app and the BookingModal opens
+pre-filled with that room. Symmetric with the ICT asset flow.
+
+Both `?loan=ast-X` and `?book=room-X` URL params are now consumed on
+app boot, then stripped from the address bar so a refresh doesn't
+re-trigger.
+
+### Bulk loan single-message digest
+
+Pinjaman Pukal was firing the per-row INSERT trigger N times,
+flooding the Telegram group with one "Pinjaman ICT Baharu" per asset
+(see screenshot the user shared mid-session). Now mirrors the bulk
+return pattern:
+
+- New `tempah.suppress_loan_notify` session-config flag honoured by
+  `notify_booking_telegram()`
+- New RPC `bulk_loan_assets(rows, by_user_id, by_user_name,
+  start_date, return_date, start_time, end_time, purpose, created_at)`
+  inserts all rows with the suppress flag set, then emits ONE
+  "📦📦 Pinjaman Pukal ICT" digest listing every unit
+- Frontend `submitBulkLoan` calls the new RPC in one round-trip
+  instead of looping `syncBookingToCloud`
+
+### Bulk loan period UI rework
+
+User feedback: "1 Hari / 3 Hari / 1 Minggu / 2 Minggu / Pilih" was
+cluttered and only let you set a return date. Simplified to **1 Hari
+/ 1 Minggu / 1 Bulan / Pilih**, and "Pilih" now exposes both **Dari**
+and **Hingga** date pickers with start-date validation that
+auto-bumps the end when the start moves past it.
+
+### Dashboard return status
+
+A returned ICT loan showing on "Tempahan Hari Ini" used to look
+identical to an active one — same blue accent, raw purpose text, no
+"balik dah" cue. Now the card switches to emerald: green left
+accent, time pill flips `MULA` → `PULANG`, a small **✓ Dipulangkan**
+badge appears beside the resource name, and the sub-line replaces
+the purpose with a status summary —
+*"Pulang TEPAT pada masa · 2026-05-12 · oleh HARSIDI"* (or
+AWAL X / LEWAT X hari, coloured amber when late).
+
+### New brand identity
+
+Full app-icon swap to a custom 3D-calendar-T logo:
+
+- New `scripts/prep-logo.mjs` (sharp-based): colour-keys near-black
+  background pixels to alpha=0, trims, pads to square, applies a
+  circular SVG mask via `dest-in`. Idempotent.
+- New `scripts/move-icons.mjs`: relocates generated icons from
+  repo root → `public/` after each regen.
+- `npm run icons` now chains prep → generate → move.
+- Source `logo-source.png` lives at **repo root** (not in `public/`)
+  so the 1.4MB original isn't shipped — only the compressed
+  generated icons (3–60KB each) reach clients.
+- Manifest `background_color` switched from `#0f172a` (slate-900) to
+  `#172554` (blue-950) so the PWA splash blends with the logo's
+  outer ring instead of fighting it.
+- In-app sidebar brand chip + onboarding welcome panel both use
+  `<img src="/pwa-192x192.png">` (already precached at 14KB) so the
+  install icon and the in-app brand visually match.
+
+### Critical bug fixes
+
+- **N/A on Dashboard / Portfolio / Reports / Admin / Bookings** —
+  every view that surfaced a booking's resource name was only
+  searching rooms + equipment categories, but ICT loans store an
+  asset id (`ast-X`) as resourceId. Returned "N/A" for every ICT
+  loan. Fixed with a shared `resolveResourceName()` helper
+  (rooms → equipment categories → assets `"Asset Name (Category)"` →
+  raw id fallback). Applied to all 5 views via a memoized `nameOf`
+  callback.
+- **Image upload silently dropped to `image_url`** — `.upsert()`
+  ran as `INSERT … ON CONFLICT DO UPDATE` and was silently filtered
+  by RLS (rooms / equipment have UPDATE but no INSERT policy).
+  Local state showed the new image; cloud row stayed `NULL`;
+  picture vanished on next page load. Fixed by switching to
+  `.update().eq('id', ...).select()`; 0-rows-affected now surfaces
+  as an alert + console.error so a future regression can't hide.
+- **`HH:MM:SS` vs `HH:MM` mismatch on bookings** — Postgres `time`
+  columns came back from Supabase as `HH:MM:SS` while optimistic
+  local state used `HH:MM`. Cards rendered both formats side by side
+  on the same screen. Fixed with a `normalizeTime()` trimmer in
+  `fetchBookingsFromCloud`.
+
+### UI fixes
+
+- BookingModal overflow on mobile — header was clipping past the top
+  edge and the submit button was being pushed off the bottom.
+  Restructured with `max-h-[92vh] flex flex-col` + sticky header +
+  internal scroll, tightened mobile padding (`p-5` instead of `p-8`),
+  `min-w-0` on grid children to prevent over-stretch.
+- Action sheet buttons were left-aligned at content width inside
+  `space-y-4` block layout (default `<button>` is `inline-block`).
+  Added `w-full` to both `ActionButton` variants → buttons span the
+  full sheet width edge-to-edge.
+
+### Schema additions
+
+- `public.bulk_loan_assets(jsonb, text, text, date, date, time, time, text, timestamptz)` RPC
+- `tempah.suppress_loan_notify` session-config flag honoured by `notify_booking_telegram()`
+
+### Files added
+
+- `src/components/QRScannerModal.tsx`
+- `src/components/ScannedActionSheet.tsx`
+- `src/components/ScanFab.tsx`
+- `src/lib/resources.ts` (`resolveResourceName`)
+- `scripts/prep-logo.mjs`
+- `scripts/move-icons.mjs`
+- `logo-source.png` (repo root — source of truth for icon regen)
+
+### Deps
+
+- Added `html5-qrcode@^2.3.8` (~350KB gzipped; bundle now 1.3MB total)
+
+---
+
+## v1.6.0 — Telegram Notifications + Bulk Workflows
 
 **The single largest milestone since v1.4.0. Five Telegram triggers,
 two daily cron digests, bulk return, admin cancel, list view, and a

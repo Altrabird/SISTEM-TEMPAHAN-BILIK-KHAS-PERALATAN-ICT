@@ -62,7 +62,8 @@ src/
 │   ├── achievements.ts        computePortfolioStats (KPIs + unlock logic)
 │   ├── locks.ts               isResourceLocked, isAssetLocked, lockReasonOf
 │   ├── dates.ts               todayLocalISO, addDaysLocalISO, daysBetween
-│   └── qr.ts                  loanUrl, generateQrDataUrl, openBulkQrSticker
+│   ├── resources.ts           resolveResourceName — id → "Asset (Category)" / room / fallback
+│   └── qr.ts                  loanUrl, bookUrl, generateQrDataUrl, openBulkQrSticker
 │
 ├── views/
 │   ├── DashboardView.tsx       Utama (hero + KPIs + today's bookings)
@@ -89,7 +90,10 @@ src/
     ├── EditResourceModal.tsx   Admin: room/category edit (incl. lock)
     ├── EditProfileModal.tsx    Self profile edit (avatar upload)
     ├── LockAssetModal.tsx      Quick lock/unlock with reason
-    ├── QRCodeModal.tsx         Per-asset QR + sticker print
+    ├── QRCodeModal.tsx         Polymorphic QR + sticker (target = asset | room)
+    ├── QRScannerModal.tsx      In-app camera scanner (html5-qrcode + manual entry)
+    ├── ScannedActionSheet.tsx  Smart router — resolves scanned id → context actions
+    ├── ScanFab.tsx             Mobile floating scan button (fixed, glowing halo)
     └── PWAUpdatePrompt.tsx     Auto-update banner
 
 deploy/
@@ -102,9 +106,16 @@ supabase/
 └── notify_setup.sql           Telegram trigger + cron + Vault setup
 
 public/
-├── logo.svg                   Single source for PWA icons
-├── favicon.ico
-└── pwa-*.png, maskable-*.png, apple-touch-icon-*.png
+├── favicon.ico                Generated — regenerate via `npm run icons`
+└── pwa-*.png, maskable-*.png, apple-touch-icon-*.png  All from logo-source.png
+
+logo-source.png                Brand source at REPO ROOT (not in public/) so
+                               the 1.4MB original doesn't ship to clients.
+                               `npm run icons` masks it + regenerates everything.
+
+scripts/
+├── prep-logo.mjs              Sharp: colour-key dark bg to alpha + circle mask
+└── move-icons.mjs             Relocate generated icons to public/ after regen
 ```
 
 ---
@@ -242,10 +253,18 @@ certbot --nginx -d tempah.altrabird.click
 | deploy.sh permission denied | Just `bash` it once | `git update-index --chmod=+x` already applied |
 | Tailwind purge missing class | Style absent in build | Use full literal class names, no string interp |
 | Bulk-update spamming Telegram | N triggers fire, N messages | Use RPC + `set_config('tempah.suppress_*_notify','on',true)` |
+| `.upsert()` silently dropping writes | Local state updates, cloud row stays NULL | RLS may have UPDATE but no INSERT. Use `.update().eq('id',...).select()` and treat 0 rows affected as an error |
+| Bookings showing `HH:MM` vs `HH:MM:SS` side by side | Postgres `time` columns come back with seconds | `normalizeTime()` trim in `fetchBookingsFromCloud` |
+| Dashboard / Portfolio etc. showing "N/A" for ICT loans | View searched only rooms + equipment categories; loans store asset id | Use `resolveResourceName()` from `lib/resources.ts` everywhere |
+| html5-qrcode qrbox overlay off-centre | `aspectRatio` constraint + custom `qrbox` while CSS object-cover crops | Drop both — let camera use native aspect, use only the CSS purple corner brackets |
+| BookingModal clipping on mobile | `p-8 overflow-hidden` with no height cap | `max-h-[92vh] flex flex-col` + sticky header + internal scroll (see BulkLoanModal pattern) |
+| Logo source shipping to clients | `logo-source.png` placed in `public/` | Keep it at repo root — `move-icons.mjs` puts the generated copies in `public/` |
+| Logo with black square background looks bad as install icon | OS adaptive mask crops a circle → exposes corners → launcher wraps in white circle | Mask to transparent first via `scripts/prep-logo.mjs` |
+| New PWA icon not showing on phone home screen | OS caches the install icon; service worker can't replace it | Uninstall + reinstall the PWA. Browser tab favicon refreshes on hard reload, no uninstall needed |
 
 ---
 
-## 10. What's done (v1.6.0)
+## 10. What's done (v1.7.0)
 
 ### Core booking flows
 - ✅ Bilik Khas booking with time-slot conflict detection
@@ -279,19 +298,36 @@ certbot --nginx -d tempah.altrabird.click
 - ✅ Reports — KPIs, trend chart, top users/resources, printable A4
 - ✅ Tetapan — profile editor, reset, backend status
 
+### QR scan-driven flows (new v1.7)
+- ✅ In-app QR scanner — html5-qrcode camera + manual-entry fallback
+- ✅ Front/back camera toggle, scoped scan area with corner brackets
+- ✅ Smart action sheet — context-aware actions for every resolved state:
+  available asset → Pinjam, loan-to-me → Pulangkan, loan-to-others (admin)
+  → Rekod Pemulangan, locked → reason + view, room → Tempah Bilik Ini
+- ✅ Fixed glowing FAB (mobile) + desktop header pill — entry points
+- ✅ First-visit instruction tooltip on the FAB, auto-dismisses
+- ✅ Per-room QR code (Bilik Khas) — admin-only generate + print sticker
+- ✅ Symmetric deep-links: `?loan=ast-X` (ICT) and `?book=room-X` (rooms)
+
 ### UI
 - ✅ Card / List view toggle for Bilik Khas + Peralatan ICT
 - ✅ Mobile-first: drawer + bottom nav, vibrant Hadir@SKBT-style
-- ✅ Print-friendly: report, booking list, single slip, asset QR, bulk QR
+- ✅ Print-friendly: report, booking list, single slip, asset/room QR, bulk QR
 - ✅ Hidden native scrollbars on modals + sidebar + main content
 - ✅ PWA — installable, offline app shell, auto-update prompt
+- ✅ Custom 3D-calendar-T brand logo across favicon, install icon,
+  splash, sidebar chip, onboarding panel — all from one source
+- ✅ Dashboard "Tempahan Hari Ini" shows return status pill + summary
+  (Pulang TEPAT / AWAL X / LEWAT X hari) for returned loans
 
-### Telegram notifications (6 events)
+### Telegram notifications (7 paths)
 - ✅ Instant: booking INSERT (rooms + ICT loans)
 - ✅ Instant: return (with early / on-time / late label + notes)
 - ✅ Instant: cancel (with admin attribution + optional reason)
 - ✅ Bulk return: ONE consolidated digest via `bulk_return_loans()` RPC
   (per-row trigger suppressed via session config flag)
+- ✅ **NEW v1.7**: Bulk loan: ONE consolidated digest via
+  `bulk_loan_assets()` RPC (suppress flag `tempah.suppress_loan_notify`)
 - ✅ Daily 06:30 MY morning digest of today's rooms + multi-day loans
 - ✅ Daily 08:00 MY overdue + due-tomorrow ICT reminder
 
@@ -330,7 +366,7 @@ npm run dev              # http://localhost:3000
 # Build + typecheck
 npm run lint             # tsc --noEmit
 npm run build            # vite build → dist/
-npm run icons            # regenerate PWA icons from public/logo.svg
+npm run icons            # mask logo-source.png → regen PWA icons → move to public/
 
 # Verify production
 curl -I https://tempah.altrabird.click
@@ -363,3 +399,17 @@ curl https://tempah.altrabird.click/manifest.webmanifest
   it, the absolute backdrop paints over everything.
 - Dates: never `toISOString().split('T')[0]` — always import from
   `lib/dates.ts`. UTC vs Asia/Kuala_Lumpur off-by-one bites otherwise.
+- Resource names: never look up by `[...rooms, ...equipment]` alone.
+  ICT loans store an asset id, not a category id. Use
+  `resolveResourceName(id, rooms, equipment, assets)` from
+  `lib/resources.ts` — it handles the asset → "Name (Category)"
+  fallback so loans don't render as "N/A".
+- Supabase RLS: `rooms` and `equipment` have UPDATE but no INSERT
+  policy. So `.upsert()` on those tables silently fails (no error,
+  zero rows affected). Use plain `.update().eq('id', ...).select()`
+  for edits, and surface 0-rows-affected as an error.
+- Logo regen: `npm run icons` reads `logo-source.png` at repo root
+  (NOT in `public/`), masks → generates → moves to `public/`. To swap
+  the logo, drop a new file at `logo-source.png` and run the command.
+  A reusable skill at `~/.claude/skills/pwa-logo-swap/` captures this
+  end-to-end workflow for any future Vite+PWA project.

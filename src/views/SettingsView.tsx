@@ -190,7 +190,7 @@ export function SettingsView({ profile, onReset, onSaveProfile, onSwitchProfile 
       <div className="grid grid-cols-2 gap-4">
         <div className="p-4 bg-white border border-slate-200 rounded-xl">
           <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Versi Stabil</p>
-          <p className="text-sm font-bold text-slate-700">v1.6.0</p>
+          <p className="text-sm font-bold text-slate-700">v1.7.0</p>
         </div>
         <div className="p-4 bg-white border border-slate-200 rounded-xl">
           <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Tahun Aktif</p>
