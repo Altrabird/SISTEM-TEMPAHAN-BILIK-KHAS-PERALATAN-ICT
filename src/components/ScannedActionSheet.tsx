@@ -351,11 +351,15 @@ function ActionButton({
   hidden?: boolean;
 }) {
   if (hidden) return null;
+  // `w-full` is critical here — <button> defaults to inline-block, so
+  // without it the button shrinks to its text width and looks
+  // awkwardly left-aligned inside the action sheet (see the "TEMPAH
+  // BILIK INI" screenshot bug).
   if (primary) {
     return (
       <button
         onClick={onClick}
-        className="bg-gradient-to-r from-purple-600 to-pink-600 text-white py-2.5 rounded-lg text-xs font-bold uppercase tracking-widest hover:from-purple-700 hover:to-pink-700 transition-all shadow-lg shadow-purple-500/25 active:scale-[0.98] flex items-center justify-center gap-2"
+        className="w-full bg-gradient-to-r from-purple-600 to-pink-600 text-white py-2.5 rounded-lg text-xs font-bold uppercase tracking-widest hover:from-purple-700 hover:to-pink-700 transition-all shadow-lg shadow-purple-500/25 active:scale-[0.98] flex items-center justify-center gap-2"
       >
         <Icon size={14} /> {children}
       </button>
@@ -364,7 +368,7 @@ function ActionButton({
   return (
     <button
       onClick={onClick}
-      className="bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 py-2.5 rounded-lg text-xs font-bold uppercase tracking-widest transition-all active:scale-[0.98] flex items-center justify-center gap-2"
+      className="w-full bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 py-2.5 rounded-lg text-xs font-bold uppercase tracking-widest transition-all active:scale-[0.98] flex items-center justify-center gap-2"
     >
       <Icon size={14} /> {children}
     </button>
