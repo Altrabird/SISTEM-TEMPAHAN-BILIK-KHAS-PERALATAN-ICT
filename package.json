@@ -9,7 +9,7 @@
     "preview": "vite preview",
     "clean": "rm -rf dist",
     "lint": "tsc --noEmit",
-    "icons": "pwa-assets-generator"
+    "icons": "node scripts/prep-logo.mjs && pwa-assets-generator && node scripts/move-icons.mjs"
   },
   "dependencies": {
     "@google/genai": "^1.29.0",

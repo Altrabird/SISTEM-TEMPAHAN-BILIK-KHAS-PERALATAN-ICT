@@ -21,7 +21,10 @@ export default defineConfig(({ mode }) => {
           short_name: 'TEMPAH',
           description: 'Sistem tempahan bilik khas dan peralatan ICT untuk SK Bandar Tawau',
           theme_color: '#2563eb',
-          background_color: '#0f172a',
+          // Picked to match the logo's deepest outer ring — when the OS
+          // shows the PWA splash, the icon's dark navy edge bleeds into
+          // this same blue-950 instead of sitting on jarring slate-900.
+          background_color: '#172554',
           display: 'standalone',
           orientation: 'portrait',
           scope: '/',
