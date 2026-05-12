@@ -1,44 +1,87 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { X, Printer, Download, QrCode, Loader2 } from 'lucide-react';
 import { Asset, Resource } from '../types';
-import { generateQrDataUrl, loanUrl } from '../lib/qr';
+import { generateQrDataUrl, loanUrl, bookUrl } from '../lib/qr';
+
+/**
+ * The modal can show a QR for either an ICT asset (encodes ?loan=ast-X)
+ * or a Bilik Khas room (encodes ?book=room-X). The two flows share the
+ * same UI shell — only the labels, default file name, and sticker copy
+ * differ — so we discriminate via the `target` prop.
+ */
+export type QRTarget =
+  | { kind: 'asset'; asset: Asset; category: Resource | null }
+  | { kind: 'room'; room: Resource };
 
 interface Props {
   open: boolean;
-  asset: Asset | null;
-  category: Resource | null; // the equipment category (e.g., 'Laptop Murid')
+  target: QRTarget | null;
   onClose: () => void;
 }
 
-export function QRCodeModal({ open, asset, category, onClose }: Props) {
+export function QRCodeModal({ open, target, onClose }: Props) {
   const [dataUrl, setDataUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
+  // Derive the encoded URL + display labels from the target kind. Memoized
+  // so dependent useEffects don't refire on unrelated re-renders.
+  const view = useMemo(() => {
+    if (!target) return null;
+    if (target.kind === 'asset') {
+      const a = target.asset;
+      const categoryName = target.category?.name ?? a.resourceId;
+      return {
+        encodedUrl: loanUrl(a.id),
+        title: 'QR Pinjaman',
+        subtitle: 'Imbas untuk pinjam pantas',
+        primaryName: a.name,
+        serialOrLabel: a.serialNumber,
+        secondaryLabel: categoryName,
+        downloadName: `qr-${a.serialNumber || a.id}.png`,
+        stickerHeading: 'Sistem Tempahan ICT',
+        stickerFooter: 'Imbas QR ini untuk pinjam unit ini.<br>Aplikasi akan minta tujuan & tempoh pinjaman sahaja.',
+        gradient: 'from-purple-600 to-pink-600',
+        callout: 'Tampal pada peralatan. Peminjam imbas dengan kamera telefon → menu pinjam akan muncul.',
+      };
+    }
+    const r = target.room;
+    return {
+      encodedUrl: bookUrl(r.id),
+      title: 'QR Tempahan Bilik',
+      subtitle: 'Imbas untuk tempah pantas',
+      primaryName: r.name,
+      serialOrLabel: r.capacity ? `Muatan ${r.capacity} pax` : 'Bilik Khas',
+      secondaryLabel: 'Bilik Khas',
+      downloadName: `qr-bilik-${r.id}.png`,
+      stickerHeading: 'Sistem Tempahan Bilik Khas',
+      stickerFooter: 'Imbas QR ini untuk tempah bilik ini.<br>Aplikasi akan minta tarikh, masa & tujuan sahaja.',
+      gradient: 'from-blue-600 to-indigo-600',
+      callout: 'Tampal di pintu bilik. Guru imbas dengan kamera telefon → borang tempahan akan muncul.',
+    };
+  }, [target]);
+
   useEffect(() => {
-    if (!open || !asset) return;
+    if (!open || !view) return;
     let cancelled = false;
     setLoading(true);
-    generateQrDataUrl(loanUrl(asset.id))
+    generateQrDataUrl(view.encodedUrl)
       .then((url) => { if (!cancelled) setDataUrl(url); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [open, asset]);
+  }, [open, view]);
 
-  if (!asset) return null;
-
-  const url = loanUrl(asset.id);
-  const categoryName = category?.name ?? asset.resourceId;
+  if (!view) return null;
 
   const printSticker = () => {
-    if (!dataUrl) return;
+    if (!dataUrl || !view) return;
     const w = window.open('', '_blank', 'width=600,height=700');
     if (!w) {
       alert('Pop-up disekat. Sila benarkan pop-up untuk laman ini.');
       return;
     }
     w.document.write(`<!doctype html>
-<html lang="ms"><head><meta charset="utf-8"><title>QR ${asset.name}</title>
+<html lang="ms"><head><meta charset="utf-8"><title>QR ${view.primaryName}</title>
 <style>
   * { box-sizing: border-box; }
   body { font-family: -apple-system, "Segoe UI", Roboto, sans-serif; margin: 0; padding: 24px; color: #0f172a; }
@@ -64,12 +107,12 @@ export function QRCodeModal({ open, asset, category, onClose }: Props) {
 <body>
 <div class="sticker">
   <p class="school">SK Bandar Tawau</p>
-  <h1>Sistem Tempahan ICT</h1>
+  <h1>${escapeHtml(view.stickerHeading)}</h1>
   <div class="qr"><img src="${dataUrl}" alt="QR" /></div>
-  <p class="name">${escapeHtml(asset.name)}</p>
-  <p class="sn">${escapeHtml(asset.serialNumber)}</p>
-  <p class="cat">${escapeHtml(categoryName)}</p>
-  <p class="footer">Imbas QR ini untuk pinjam unit ini.<br>Aplikasi akan minta tujuan & tempoh pinjaman sahaja.</p>
+  <p class="name">${escapeHtml(view.primaryName)}</p>
+  <p class="sn">${escapeHtml(view.serialOrLabel)}</p>
+  <p class="cat">${escapeHtml(view.secondaryLabel)}</p>
+  <p class="footer">${view.stickerFooter}</p>
 </div>
 <script>window.onload = () => window.print();</script>
 </body></html>`);
@@ -77,10 +120,10 @@ export function QRCodeModal({ open, asset, category, onClose }: Props) {
   };
 
   const downloadPng = () => {
-    if (!dataUrl) return;
+    if (!dataUrl || !view) return;
     const a = document.createElement('a');
     a.href = dataUrl;
-    a.download = `qr-${asset.serialNumber || asset.id}.png`;
+    a.download = view.downloadName;
     a.click();
   };
 
@@ -103,13 +146,13 @@ export function QRCodeModal({ open, asset, category, onClose }: Props) {
           >
             <div className="flex justify-between items-start mb-4">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-slate-900 to-slate-700 flex items-center justify-center text-white shrink-0">
+                <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${view.gradient} flex items-center justify-center text-white shrink-0`}>
                   <QrCode size={18} />
                 </div>
                 <div>
-                  <h2 className="text-base font-bold tracking-tight text-slate-800">QR Pinjaman</h2>
+                  <h2 className="text-base font-bold tracking-tight text-slate-800">{view.title}</h2>
                   <p className="text-[10px] text-slate-500 uppercase tracking-widest font-semibold">
-                    Imbas untuk pinjam pantas
+                    {view.subtitle}
                   </p>
                 </div>
               </div>
@@ -126,17 +169,17 @@ export function QRCodeModal({ open, asset, category, onClose }: Props) {
                 {loading || !dataUrl ? (
                   <Loader2 size={32} className="text-slate-300 animate-spin" />
                 ) : (
-                  <img src={dataUrl} alt={`QR ${asset.name}`} className="w-full h-full" />
+                  <img src={dataUrl} alt={`QR ${view.primaryName}`} className="w-full h-full" />
                 )}
               </div>
-              <p className="mt-4 text-base font-bold text-slate-800">{asset.name}</p>
-              <p className="text-[10px] font-mono text-blue-600 uppercase mt-0.5">{asset.serialNumber}</p>
-              <p className="text-[10px] text-slate-500 mt-1">{categoryName}</p>
+              <p className="mt-4 text-base font-bold text-slate-800">{view.primaryName}</p>
+              <p className="text-[10px] font-mono text-blue-600 uppercase mt-0.5">{view.serialOrLabel}</p>
+              <p className="text-[10px] text-slate-500 mt-1">{view.secondaryLabel}</p>
             </div>
 
             <div className="mt-4 p-3 bg-slate-100 rounded-lg">
               <p className="text-[9px] font-bold uppercase tracking-widest text-slate-500 mb-1">URL</p>
-              <code className="text-[10px] text-slate-700 break-all">{url}</code>
+              <code className="text-[10px] text-slate-700 break-all">{view.encodedUrl}</code>
             </div>
 
             <div className="grid grid-cols-2 gap-2 mt-5">
@@ -157,7 +200,7 @@ export function QRCodeModal({ open, asset, category, onClose }: Props) {
             </div>
 
             <p className="text-[10px] text-slate-500 text-center mt-3 leading-relaxed">
-              Tampal pada peralatan. Peminjam imbas dengan kamera telefon → menu pinjam akan muncul.
+              {view.callout}
             </p>
           </motion.div>
         </div>

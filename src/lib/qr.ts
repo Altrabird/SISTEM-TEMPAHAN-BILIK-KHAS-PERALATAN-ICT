@@ -8,6 +8,13 @@ export function loanUrl(assetId: string): string {
   return `${origin}/?loan=${encodeURIComponent(assetId)}`;
 }
 
+/** Deep-link URL for a Bilik Khas QR code. Scanning it opens the booking
+ *  modal pre-filled with that room. */
+export function bookUrl(roomId: string): string {
+  const origin = typeof window !== 'undefined' ? window.location.origin : '';
+  return `${origin}/?book=${encodeURIComponent(roomId)}`;
+}
+
 /** Encode any payload as a QR code, returned as a PNG data URL. */
 export async function generateQrDataUrl(
   text: string,

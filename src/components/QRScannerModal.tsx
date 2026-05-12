@@ -295,18 +295,22 @@ export function QRScannerModal({ open, onScan, onClose }: Props) {
 }
 
 /** Extract a known id (`ast-X` or `room-X`) from a raw QR payload. The
- *  printed stickers encode a full URL like
- *  `https://tempah.altrabird.click/?loan=ast-3` — pull the `?loan=` param
- *  first, then fall back to id-shaped substrings, then fall back to the
- *  trimmed raw text so manual entry of just `ast-3` still works. */
+ *  printed stickers encode full URLs like
+ *  `https://tempah.altrabird.click/?loan=ast-3`  (ICT) or
+ *  `https://tempah.altrabird.click/?book=room-1` (Bilik Khas). Pull the
+ *  param first, then fall back to id-shaped substrings, then fall back
+ *  to the trimmed raw text so manual entry of `ast-3` / `room-1` still
+ *  works. */
 export function parseScannedId(raw: string): string | null {
   if (!raw) return null;
   const trimmed = raw.trim();
-  // 1. Full URL with ?loan=
+  // 1. Full URL with ?loan= (ICT asset) or ?book= (room)
   try {
     const u = new URL(trimmed);
     const loan = u.searchParams.get('loan');
     if (loan) return loan;
+    const book = u.searchParams.get('book');
+    if (book) return book;
   } catch { /* not a URL */ }
   // 2. Bare id shape
   const m = trimmed.match(/\b(ast-[A-Za-z0-9_-]+|room-[A-Za-z0-9_-]+|eq-[A-Za-z0-9_-]+)\b/);

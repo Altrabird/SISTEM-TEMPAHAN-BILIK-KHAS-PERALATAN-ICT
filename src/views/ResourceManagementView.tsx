@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
 import {
   DoorOpen, Laptop, Plus, Pencil, Package, Lock, AlertTriangle,
-  LayoutGrid, List as ListIcon,
+  LayoutGrid, List as ListIcon, QrCode,
 } from 'lucide-react';
 import { Resource, ResourceType } from '../types';
 import { isResourceLocked, lockReasonOf } from '../lib/locks';
@@ -18,6 +18,8 @@ interface Props {
   isAdmin?: boolean;
   onEdit?: (resource: Resource) => void;
   onBulkLoan?: () => void;
+  /** Admin-only: open QR sticker preview for a room. Only used when `type === 'room'`. */
+  onShowQR?: (resource: Resource) => void;
 }
 
 const VIEW_MODE_KEY = 'tempah_resource_view_mode';
@@ -31,7 +33,7 @@ function loadViewMode(): ViewMode {
   }
 }
 
-export function ResourceManagementView({ resources, title, type, onAction, onAdd, isAdmin, onEdit, onBulkLoan }: Props) {
+export function ResourceManagementView({ resources, title, type, onAction, onAdd, isAdmin, onEdit, onBulkLoan, onShowQR }: Props) {
   const [viewMode, setViewMode] = useState<ViewMode>(loadViewMode);
 
   useEffect(() => {
@@ -107,6 +109,7 @@ export function ResourceManagementView({ resources, title, type, onAction, onAdd
           onAction={onAction}
           isAdmin={isAdmin}
           onEdit={onEdit}
+          onShowQR={onShowQR}
         />
       ) : (
         <ListView
@@ -115,6 +118,7 @@ export function ResourceManagementView({ resources, title, type, onAction, onAdd
           onAction={onAction}
           isAdmin={isAdmin}
           onEdit={onEdit}
+          onShowQR={onShowQR}
         />
       )}
     </div>
@@ -125,13 +129,14 @@ export function ResourceManagementView({ resources, title, type, onAction, onAdd
 // Card view (default)
 // ---------------------------------------------------------------------------
 function CardGrid({
-  resources, type, onAction, isAdmin, onEdit,
+  resources, type, onAction, isAdmin, onEdit, onShowQR,
 }: {
   resources: Resource[];
   type: ResourceType;
   onAction: (id: string) => void;
   isAdmin?: boolean;
   onEdit?: (r: Resource) => void;
+  onShowQR?: (r: Resource) => void;
 }) {
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
@@ -191,6 +196,16 @@ function CardGrid({
                 title="Edit (termasuk kunci)"
               >
                 <Pencil size={12} />
+              </button>
+            )}
+            {/* Admin-only QR button for Bilik Khas — sits beside the edit icon */}
+            {isAdmin && type === 'room' && onShowQR && (
+              <button
+                onClick={(e) => { e.stopPropagation(); onShowQR(r); }}
+                className="absolute top-3 left-11 bg-white/95 backdrop-blur p-1.5 rounded-md shadow-sm border border-white/40 text-slate-500 hover:text-purple-600 hover:bg-white transition-all"
+                title="Jana kod QR untuk tempahan pantas"
+              >
+                <QrCode size={12} />
               </button>
             )}
           </div>
@@ -258,13 +273,14 @@ function CardGrid({
 // List view (compact)
 // ---------------------------------------------------------------------------
 function ListView({
-  resources, type, onAction, isAdmin, onEdit,
+  resources, type, onAction, isAdmin, onEdit, onShowQR,
 }: {
   resources: Resource[];
   type: ResourceType;
   onAction: (id: string) => void;
   isAdmin?: boolean;
   onEdit?: (r: Resource) => void;
+  onShowQR?: (r: Resource) => void;
 }) {
   return (
     <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
@@ -334,6 +350,15 @@ function ListView({
 
               {/* Actions */}
               <div className="flex items-center gap-1 shrink-0">
+                {isAdmin && type === 'room' && onShowQR && (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); onShowQR(r); }}
+                    className="p-2 rounded-lg text-slate-400 hover:bg-purple-50 hover:text-purple-600 transition-all"
+                    title="Jana kod QR untuk tempahan pantas"
+                  >
+                    <QrCode size={14} />
+                  </button>
+                )}
                 {isAdmin && onEdit && (
                   <button
                     onClick={(e) => { e.stopPropagation(); onEdit(r); }}

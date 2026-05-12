@@ -80,6 +80,7 @@ export default function App() {
   const [loanFromQr, setLoanFromQr] = useState(false);
   const [showBulkLoanModal, setShowBulkLoanModal] = useState(false);
   const [qrAsset, setQrAsset] = useState<Asset | null>(null);
+  const [qrRoom, setQrRoom] = useState<Resource | null>(null);
   const [pendingLoanId, setPendingLoanId] = useState<string | null>(null);
   const [lockingAsset, setLockingAsset] = useState<Asset | null>(null);
   const [editingAsset, setEditingAsset] = useState<Asset | null>(null);
@@ -113,11 +114,22 @@ export default function App() {
       if (cloudBookings !== null) setBookings(cloudBookings);
     })();
 
-    // Parse ?loan=ast-X URL param (QR code deep-link entry).
+    // Parse QR-code deep-link URL params. Two shapes are supported:
+    //   ?loan=ast-X  → opens LoanModal for that ICT asset
+    //   ?book=room-X → opens the ScannedActionSheet which then routes to
+    //                   the BookingModal pre-filled with that room.
+    // Once consumed, strip the param so refresh doesn't reopen the flow.
     try {
       const params = new URLSearchParams(window.location.search);
       const loanId = params.get('loan');
+      const bookId = params.get('book');
       if (loanId) setPendingLoanId(loanId);
+      else if (bookId) setScannedId(bookId);
+      if (bookId) {
+        const url = new URL(window.location.href);
+        url.searchParams.delete('book');
+        window.history.replaceState({}, '', url.toString());
+      }
     } catch {
       /* noop */
     }
@@ -713,6 +725,7 @@ export default function App() {
                   onAction={(id) => openBookingModal({ resourceId: id, resourceType: 'room' })}
                   isAdmin={isAdmin}
                   onEdit={(r) => setEditingResource(r)}
+                  onShowQR={(r) => setQrRoom(r)}
                 />
               )}
               {activeView === 'equipment' && (
@@ -925,10 +938,15 @@ export default function App() {
       />
 
       <QRCodeModal
-        open={qrAsset !== null}
-        asset={qrAsset}
-        category={qrAsset ? equipment.find((e) => e.id === qrAsset.resourceId) ?? null : null}
-        onClose={() => setQrAsset(null)}
+        open={qrAsset !== null || qrRoom !== null}
+        target={
+          qrAsset
+            ? { kind: 'asset', asset: qrAsset, category: equipment.find((e) => e.id === qrAsset.resourceId) ?? null }
+            : qrRoom
+            ? { kind: 'room', room: qrRoom }
+            : null
+        }
+        onClose={() => { setQrAsset(null); setQrRoom(null); }}
       />
 
       <LockAssetModal
