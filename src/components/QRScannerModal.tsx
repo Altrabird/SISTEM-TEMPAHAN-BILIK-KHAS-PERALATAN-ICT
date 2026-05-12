@@ -77,12 +77,22 @@ export function QRScannerModal({ open, onScan, onClose }: Props) {
           { facingMode: facing },
           {
             fps: 10,
-            qrbox: (vw, vh) => {
-              const min = Math.min(vw, vh);
-              const side = Math.floor(min * 0.7);
-              return { width: side, height: side };
-            },
-            aspectRatio: 1.3333,
+            // Intentionally NOT passing `qrbox` or `aspectRatio` here.
+            //
+            // Earlier we forced `aspectRatio: 1.333` (4:3 camera stream) and
+            // a 70%-of-viewport square qrbox. The container is CSS
+            // `aspect-square` with `object-cover` cropping, which means the
+            // 4:3 stream gets visually cropped to a square — but the
+            // library's qrbox overlay still positioned itself in the
+            // un-cropped video coordinate space, so it appeared offset
+            // from the visible square (see screenshot bug report).
+            //
+            // Dropping both lets the camera use its native aspect, the
+            // video element fills our square via object-cover, and the
+            // library scans the full frame. Our purple corner brackets
+            // (rendered below) are the only visible scan-zone indicator,
+            // which is always perfectly centered because they're CSS-
+            // positioned relative to the same square container.
           },
           (decoded) => {
             if (cancelled) return;

@@ -17,9 +17,13 @@ interface Props {
  *     `{ side, topPct }` pair so the position survives across sessions
  *     and viewport rotations.
  *
- * Position is stored as percentage of viewport height (not raw px) so the
- * button stays roughly where you put it after rotating the device or
- * resizing the window.
+ * Smoothness note: while the user is dragging, position updates bypass
+ * React entirely and mutate `style.left` / `style.top` on the DOM node
+ * via a ref. We only commit to React state once, on drop. That keeps the
+ * drag pinned to native 60fps even on lower-end Android browsers — the
+ * earlier version called `setState` per `pointermove`, which queued a
+ * full reconciliation on every frame and produced the stickiness the
+ * user reported.
  */
 
 const STORAGE_KEY = 'tempah.scanFab.pos';
@@ -50,9 +54,7 @@ function clamp(n: number, lo: number, hi: number): number {
 export function DraggableScanFab({ onClick }: Props) {
   const [pos, setPos] = useState<SavedPos>(readSavedPos);
   const [isDragMode, setIsDragMode] = useState(false);
-  // px coords during active drag (top-left corner of the button)
-  const [dragXY, setDragXY] = useState<{ x: number; y: number } | null>(null);
-  // Force re-render on viewport resize so the resting position stays valid
+  // Force a re-render on viewport resize so the resting position stays valid
   const [, forceRender] = useState(0);
 
   const longPressTimer = useRef<number | null>(null);
@@ -61,6 +63,11 @@ export function DraggableScanFab({ onClick }: Props) {
   const grabOffset = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
   const movedDuringPress = useRef(false);
   const fabRef = useRef<HTMLButtonElement | null>(null);
+  // Last drag position — written by pointermove (direct DOM), read on release
+  const dragPosRef = useRef<{ x: number; y: number } | null>(null);
+  // We track drag mode in a ref too so the synchronous pointermove handler
+  // can see the latest value without waiting for a re-render.
+  const dragModeRef = useRef(false);
 
   useEffect(() => {
     const onResize = () => forceRender((n) => n + 1);
@@ -88,7 +95,21 @@ export function DraggableScanFab({ onClick }: Props) {
     }
   };
 
+  /** Write left/top to the FAB's DOM node directly — never goes through
+   *  React. This is the hot path during a drag; calling setState here
+   *  causes the stickiness the user saw on mid-range Android devices. */
+  const writeDomPosition = (x: number, y: number) => {
+    const node = fabRef.current;
+    if (!node) return;
+    node.style.left = `${x}px`;
+    node.style.top = `${y}px`;
+    node.style.right = 'auto';
+    node.style.bottom = 'auto';
+    dragPosRef.current = { x, y };
+  };
+
   const enterDragMode = useCallback(() => {
+    dragModeRef.current = true;
     setIsDragMode(true);
     // Haptic feedback on Android; iOS Safari ignores this silently
     if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
@@ -97,7 +118,6 @@ export function DraggableScanFab({ onClick }: Props) {
   }, []);
 
   const handlePointerDown = (e: React.PointerEvent<HTMLButtonElement>) => {
-    // Only left-click / single touch
     if (e.button !== undefined && e.button !== 0) return;
 
     movedDuringPress.current = false;
@@ -110,25 +130,27 @@ export function DraggableScanFab({ onClick }: Props) {
       grabOffset.current = { x: e.clientX - rect.left, y: e.clientY - rect.top };
     }
 
-    // Start the long-press countdown
     cancelLongPressTimer();
     longPressTimer.current = window.setTimeout(() => {
       longPressTimer.current = null;
-      enterDragMode();
-      // Initialize drag position to current rect so there's no jump
+      // Pin DOM position to the current rect *before* flipping state, so
+      // the "switch to absolute coords" doesn't visually jump.
       const r = fabRef.current?.getBoundingClientRect();
-      if (r) setDragXY({ x: r.left, y: r.top });
+      if (r) {
+        dragPosRef.current = { x: r.left, y: r.top };
+        writeDomPosition(r.left, r.top);
+      }
+      enterDragMode();
     }, LONG_PRESS_MS);
 
-    // Capture so we keep receiving pointer events even if the finger slides off
     try { (e.target as Element).setPointerCapture?.(e.pointerId); } catch { /* noop */ }
   };
 
   const handlePointerMove = (e: React.PointerEvent<HTMLButtonElement>) => {
     const start = startCoords.current;
 
-    // Pre-drag-mode: cancel the long-press if the user moved (i.e. is scrolling)
-    if (!isDragMode) {
+    // Pre-drag-mode: cancel the long-press if the user moved (i.e. scrolling)
+    if (!dragModeRef.current) {
       if (!start) return;
       const dx = e.clientX - start.x;
       const dy = e.clientY - start.y;
@@ -139,59 +161,88 @@ export function DraggableScanFab({ onClick }: Props) {
       return;
     }
 
-    // In drag mode: update position
+    // In drag mode: direct DOM update — no React state churn
     e.preventDefault();
     const vw = window.innerWidth;
     const vh = window.innerHeight;
     const x = clamp(e.clientX - grabOffset.current.x, EDGE_MARGIN, vw - FAB_SIZE - EDGE_MARGIN);
     const y = clamp(e.clientY - grabOffset.current.y, EDGE_MARGIN, vh - FAB_SIZE - EDGE_MARGIN);
-    setDragXY({ x, y });
+    writeDomPosition(x, y);
   };
 
-  const handlePointerUp = (e: React.PointerEvent<HTMLButtonElement>) => {
-    const wasDragging = isDragMode && dragXY !== null;
+  const handlePointerUp = () => {
+    const wasDragging = dragModeRef.current;
     const fired = longPressTimer.current !== null && !movedDuringPress.current;
 
     cancelLongPressTimer();
 
-    if (wasDragging && dragXY) {
-      // Snap horizontally to nearest edge, persist topPct
+    if (wasDragging && dragPosRef.current) {
+      // Snap horizontally to nearest edge + persist topPct
       const vw = window.innerWidth;
       const vh = window.innerHeight;
-      const center = dragXY.x + FAB_SIZE / 2;
+      const center = dragPosRef.current.x + FAB_SIZE / 2;
       const side: 'left' | 'right' = center < vw / 2 ? 'left' : 'right';
-      const topPct = clamp((dragXY.y / vh) * 100, 5, 92);
+      const topPct = clamp((dragPosRef.current.y / vh) * 100, 5, 92);
       const next: SavedPos = { side, topPct };
+
+      // Reset inline DOM overrides so React's resting style takes over
+      const node = fabRef.current;
+      if (node) {
+        node.style.left = '';
+        node.style.top = '';
+        node.style.right = '';
+        node.style.bottom = '';
+      }
+      dragPosRef.current = null;
+      dragModeRef.current = false;
+      setIsDragMode(false);
       setPos(next);
       try { localStorage.setItem(STORAGE_KEY, JSON.stringify(next)); } catch { /* noop */ }
-      setIsDragMode(false);
-      setDragXY(null);
       return;
     }
 
+    dragModeRef.current = false;
     setIsDragMode(false);
-    setDragXY(null);
     startCoords.current = null;
 
-    // Treat as a click only if the long-press timer hadn't fired yet
-    // (meaning user released before LONG_PRESS_MS) AND user didn't scroll
+    // Treat as click only if the long-press timer hadn't fired yet
+    // AND the user didn't scroll past the threshold.
     if (fired && !movedDuringPress.current) {
       onClick();
     }
-    void e;
   };
 
   const handlePointerCancel = () => {
     cancelLongPressTimer();
+    // Clean DOM overrides if any
+    const node = fabRef.current;
+    if (node) {
+      node.style.left = '';
+      node.style.top = '';
+      node.style.right = '';
+      node.style.bottom = '';
+    }
+    dragPosRef.current = null;
+    dragModeRef.current = false;
     setIsDragMode(false);
-    setDragXY(null);
     startCoords.current = null;
     movedDuringPress.current = false;
   };
 
-  const positionStyle: React.CSSProperties = dragXY
-    ? { left: dragXY.x, top: dragXY.y, right: 'auto', bottom: 'auto' }
-    : { ...restingPosition(), right: 'auto', bottom: 'auto' };
+  // Resting style (used when NOT dragging). During drag the inline DOM
+  // overrides set by writeDomPosition() win over these.
+  const resting = restingPosition();
+  const restingStyle: React.CSSProperties = {
+    left: resting.left,
+    top: resting.top,
+    right: 'auto',
+    bottom: 'auto',
+    touchAction: isDragMode ? 'none' : 'manipulation',
+    cursor: isDragMode ? 'grabbing' : 'pointer',
+    // willChange hints the browser to promote to its own compositor layer,
+    // which avoids the stuttery handoff when drag mode kicks in.
+    willChange: 'left, top',
+  };
 
   return (
     <button
@@ -206,18 +257,13 @@ export function DraggableScanFab({ onClick }: Props) {
           ? 'bg-gradient-to-br from-pink-500 to-purple-700 shadow-purple-500/60 scale-110 ring-4 ring-purple-300/50'
           : 'bg-gradient-to-br from-purple-600 to-pink-600 shadow-purple-500/40 active:scale-95'
       }`}
-      style={{
-        ...positionStyle,
-        touchAction: isDragMode ? 'none' : 'manipulation',
-        cursor: isDragMode ? 'grabbing' : 'pointer',
-      }}
+      style={restingStyle}
       title={isDragMode ? 'Lepaskan untuk simpan kedudukan' : 'Imbas kod QR (tekan lama untuk gerak)'}
       aria-label="Imbas kod QR"
     >
       {isDragMode ? <Move size={20} /> : <QrCode size={22} />}
-      {/* Tiny "hold to move" hint that appears the instant drag mode triggers */}
       {isDragMode && (
-        <span className="absolute -top-7 left-1/2 -translate-x-1/2 whitespace-nowrap text-[9px] font-black uppercase tracking-widest bg-slate-900/90 text-white px-2 py-0.5 rounded-md">
+        <span className="absolute -top-7 left-1/2 -translate-x-1/2 whitespace-nowrap text-[9px] font-black uppercase tracking-widest bg-slate-900/90 text-white px-2 py-0.5 rounded-md pointer-events-none">
           Geser
         </span>
       )}
