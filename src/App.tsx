@@ -52,7 +52,7 @@ import { BulkReturnModal } from './components/BulkReturnModal';
 import { PWAUpdatePrompt } from './components/PWAUpdatePrompt';
 import { QRScannerModal, parseScannedId } from './components/QRScannerModal';
 import { ScannedActionSheet } from './components/ScannedActionSheet';
-import { DraggableScanFab } from './components/DraggableScanFab';
+import { ScanFab } from './components/ScanFab';
 
 type View = 'dashboard' | 'portfolio' | 'bookings' | 'rooms' | 'equipment' | 'returns' | 'admin' | 'reports' | 'loans' | 'settings';
 
@@ -1036,8 +1036,8 @@ export default function App() {
         }}
       />
 
-      {/* Mobile-only FAB: Imbas QR — long-press to drag anywhere */}
-      {profile && <DraggableScanFab onClick={() => setShowScanner(true)} />}
+      {/* Mobile-only FAB: Imbas QR — fixed position with glowing halo */}
+      {profile && <ScanFab onClick={() => setShowScanner(true)} />}
 
       {/* Mobile bottom navigation — only visible < md */}
       {profile && (
