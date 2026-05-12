@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
 import {
-  Sparkles, ArrowRight, UserPlus, Users, Search, RefreshCw, Shield, Lock, AlertCircle, ArrowLeft
+  ArrowRight, UserPlus, Users, Search, RefreshCw, Shield, Lock, AlertCircle, ArrowLeft
 } from 'lucide-react';
 import { Profile, UserRole } from '../types';
 import { ROLE_LABELS, ADMIN_DEFAULTS } from '../constants';
@@ -128,13 +128,19 @@ export function OnboardingModal({ onComplete }: Props) {
         )}
 
         <div className="relative">
-          <div className={`w-12 h-12 sm:w-14 sm:h-14 rounded-2xl flex items-center justify-center text-white shadow-lg mb-3 sm:mb-4 ${
-            mode === 'admin'
-              ? 'bg-gradient-to-br from-purple-600 to-indigo-700'
-              : 'bg-gradient-to-br from-blue-600 to-indigo-600'
-          }`}>
-            {mode === 'admin' ? <Shield size={22} /> : <Sparkles size={22} />}
-          </div>
+          {mode === 'admin' ? (
+            <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl flex items-center justify-center text-white shadow-lg mb-3 sm:mb-4 bg-gradient-to-br from-purple-600 to-indigo-700">
+              <Shield size={22} />
+            </div>
+          ) : (
+            <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl overflow-hidden shadow-lg ring-2 ring-blue-100 mb-3 sm:mb-4">
+              <img
+                src="/pwa-192x192.png"
+                alt="TEMPAH"
+                className="w-full h-full object-cover"
+              />
+            </div>
+          )}
 
           {mode === 'admin' ? (
             <>
