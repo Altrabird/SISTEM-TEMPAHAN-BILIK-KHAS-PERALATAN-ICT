@@ -533,8 +533,12 @@ export default function App() {
       >
         {/* Brand header */}
         <div className="p-5 border-b border-white/10 flex items-start gap-3">
-          <div className="w-10 h-10 bg-white/15 backdrop-blur ring-1 ring-white/20 rounded-xl flex items-center justify-center shrink-0">
-            <CalendarDays className="text-white w-5 h-5" />
+          <div className="w-10 h-10 rounded-xl overflow-hidden ring-1 ring-white/20 shrink-0">
+            <img
+              src="/pwa-192x192.png"
+              alt="TEMPAH"
+              className="w-full h-full object-cover"
+            />
           </div>
           <div className="flex-1 min-w-0 pt-0.5">
             <h1 className="text-[9px] font-bold uppercase tracking-[0.18em] text-blue-200 leading-tight">SK Bandar Tawau</h1>

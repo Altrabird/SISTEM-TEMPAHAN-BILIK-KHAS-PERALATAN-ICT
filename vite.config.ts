@@ -15,7 +15,6 @@ export default defineConfig(({ mode }) => {
         includeAssets: [
           'favicon.ico',
           'apple-touch-icon-180x180.png',
-          'logo.svg',
         ],
         manifest: {
           name: 'TEMPAH — Sistem Tempahan Bilik Khas & Peralatan ICT',

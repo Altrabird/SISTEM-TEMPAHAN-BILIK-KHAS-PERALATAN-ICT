@@ -8,5 +8,8 @@ export default defineConfig({
     preset: '2023',
   },
   preset,
-  images: ['public/logo.svg'],
+  // Source = the high-res TEMPAH brand image. `npm run icons` reads this
+  // and regenerates favicon.ico + the full PWA icon set into public/.
+  // Lives outside public/ so the 1.4MB original isn't shipped to clients.
+  images: ['logo-source.png'],
 });
