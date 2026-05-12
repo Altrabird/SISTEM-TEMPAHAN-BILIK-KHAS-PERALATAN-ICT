@@ -165,13 +165,24 @@ export async function fetchEquipmentFromCloud(): Promise<Resource[] | null> {
   return data.map((r: any) => rowToResource(r, 'equipment'));
 }
 
+/**
+ * Persist room / equipment edits to the cloud.
+ *
+ * Rooms and equipment categories are seeded via migrations and never
+ * created from the UI, so we issue an UPDATE rather than an UPSERT.
+ *
+ * This matters: the live DB only has UPDATE + SELECT row-level policies
+ * for `rooms` and `equipment` (no INSERT). Supabase's `.upsert()` is
+ * `INSERT ... ON CONFLICT DO UPDATE` under the hood, which RLS *silently*
+ * rejects when the INSERT policy is missing — so image URLs were being
+ * dropped without surfacing an error to the user.
+ */
 export async function upsertResourceToCloud(resource: Resource): Promise<{ ok: boolean; error?: string }> {
   if (!isSupabaseEnabled || !supabase) {
     return { ok: false, error: 'Supabase belum dikonfig.' };
   }
   const table = resource.type === 'room' ? 'rooms' : 'equipment';
   const row: Record<string, any> = {
-    id: resource.id,
     name: resource.name,
     description: resource.description ?? null,
     image_url: resource.imageUrl ?? null,
@@ -180,8 +191,18 @@ export async function upsertResourceToCloud(resource: Resource): Promise<{ ok: b
   if (resource.type === 'room') row.capacity = resource.capacity ?? null;
   else row.quantity = resource.quantity ?? null;
 
-  const { error } = await supabase.from(table).upsert(row);
+  // `select()` returns the affected rows; an empty array means 0 rows
+  // matched (wrong id) OR the request was blocked by RLS — both worth
+  // surfacing as an error rather than a silent success.
+  const { data, error } = await supabase
+    .from(table)
+    .update(row)
+    .eq('id', resource.id)
+    .select();
   if (error) return { ok: false, error: error.message };
+  if (!data || data.length === 0) {
+    return { ok: false, error: `Tiada baris dikemaskini untuk ${resource.id} (RLS atau id salah?)` };
+  }
   return { ok: true };
 }
 

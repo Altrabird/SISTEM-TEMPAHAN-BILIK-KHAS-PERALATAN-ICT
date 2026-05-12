@@ -380,7 +380,16 @@ export default function App() {
     } else {
       setEquipment((prev) => prev.map((x) => (x.id === r.id ? r : x)));
     }
-    void upsertResourceToCloud(r);
+    // Surface failures so we don't silently lose edits like the
+    // image_url-not-persisting bug we hit before. Local state stays
+    // optimistic; the alert only fires when cloud write fails.
+    void (async () => {
+      const result = await upsertResourceToCloud(r);
+      if (!result.ok) {
+        console.error('[saveResource] cloud update failed:', result.error);
+        alert(`Gagal simpan ke awan: ${result.error}\n\nPerubahan dipaparkan tempatan tetapi tidak disegerakkan. Sila cuba lagi.`);
+      }
+    })();
   };
 
   const saveAsset = (a: Asset) => {
