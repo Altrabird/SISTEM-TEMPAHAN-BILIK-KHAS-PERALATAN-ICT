@@ -61,6 +61,7 @@ src/
 │   ├── storage.ts             ALL Supabase CRUD + localStorage fallback
 │   ├── achievements.ts        computePortfolioStats (KPIs + unlock logic)
 │   ├── locks.ts               isResourceLocked, isAssetLocked, lockReasonOf
+│   ├── visibility.ts          visibleFor(items, isAdmin), isHiddenFromUser
 │   ├── dates.ts               todayLocalISO, addDaysLocalISO, daysBetween
 │   ├── resources.ts           resolveResourceName — id → "Asset (Category)" / room / fallback
 │   └── qr.ts                  loanUrl, bookUrl, generateQrDataUrl, openBulkQrSticker
@@ -84,10 +85,11 @@ src/
     ├── BulkAssetActionsModal.tsx  Admin: lock/status/delete in bulk
     ├── ReturnLoanModal.tsx     Mark loan as returned + condition notes
     ├── BulkReturnModal.tsx     Confirm batch return + shared notes
-    ├── AssetListModal.tsx      Asset grid for a category
-    ├── AddAssetModal.tsx       Admin: register new unit
+    ├── AssetListModal.tsx      Asset grid for a category (+ eye toggle on each unit)
+    ├── AddAssetModal.tsx       Admin: register new unit (within existing category)
+    ├── AddResourceModal.tsx    Admin: register NEW room or equipment category
     ├── EditAssetModal.tsx      Admin: full asset edit (incl. delete)
-    ├── EditResourceModal.tsx   Admin: room/category edit (incl. lock)
+    ├── EditResourceModal.tsx   Admin: room/category edit (incl. lock + Zon Bahaya delete)
     ├── EditProfileModal.tsx    Self profile edit (avatar upload)
     ├── LockAssetModal.tsx      Quick lock/unlock with reason
     ├── QRCodeModal.tsx         Polymorphic QR + sticker (target = asset | room)
@@ -125,13 +127,20 @@ scripts/
 | Table | Key columns | Notes |
 |-------|-------------|-------|
 | `profiles` | id, name, role, department, email, avatar_url, joined_at, last_active_at | role: guru/admin/pelajar/staf |
-| `rooms` | id, name, capacity, image_url, description, locked_reason | RLS open |
-| `equipment` | id, name, quantity, image_url, description, locked_reason | category-level |
-| `assets` | id, resource_id→equipment, name, serial_number, specifications, image_url, status, locked_reason | individual units |
-| `bookings` | id, resource_id, resource_type, user_id, user_name, date, return_date, start_time, end_time, purpose, status, created_at, returned_at, returned_by_id, returned_by_name, return_notes | status: pending/confirmed/cancelled/returned |
+| `rooms` | id, name, capacity, image_url, description, locked_reason, **hidden** | RLS: SELECT/INSERT/UPDATE/DELETE all open |
+| `equipment` | id, name, quantity, image_url, description, locked_reason, **hidden** | category-level; same RLS as rooms |
+| `assets` | id, resource_id→equipment, name, serial_number, specifications, image_url, status, locked_reason, **hidden** | individual units |
+| `bookings` | id, resource_id, resource_type, user_id, user_name, date, return_date, start_time, end_time, purpose, status, created_at, returned_at, returned_by_id, returned_by_name, return_notes, cancel_* | status: pending/confirmed/cancelled/returned |
 
 **RLS**: open read + write everywhere (anon key). Internal school tool;
 fine. For public deploy → switch to `auth.uid()` policies.
+
+**Visibility vs Lock** (orthogonal admin controls on `rooms` + `equipment` + `assets`):
+- `locked_reason` (text or null) — row visible to users, with reason
+  shown; booking blocked.
+- `hidden` (boolean) — row absent from users entirely; admin still sees
+  it with a "Disorok" indicator. Use `lib/visibility.ts` `visibleFor()`
+  to filter at every consumer boundary.
 
 **Storage bucket `images`**: public read + anon write. Used for avatars,
 room/asset photos.
@@ -261,10 +270,13 @@ certbot --nginx -d tempah.altrabird.click
 | Logo source shipping to clients | `logo-source.png` placed in `public/` | Keep it at repo root — `move-icons.mjs` puts the generated copies in `public/` |
 | Logo with black square background looks bad as install icon | OS adaptive mask crops a circle → exposes corners → launcher wraps in white circle | Mask to transparent first via `scripts/prep-logo.mjs` |
 | New PWA icon not showing on phone home screen | OS caches the install icon; service worker can't replace it | Uninstall + reinstall the PWA. Browser tab favicon refreshes on hard reload, no uninstall needed |
+| Hidden rooms / assets still appearing in pickers | View received the unfiltered `rooms` / `equipment` / `assets` instead of the visible-filtered versions | Pass `visibleRooms` / `visibleEquipment` / `visibleAssets` from App.tsx to every non-admin path (BookingModal, BulkLoanModal, AssetListModal, ResourceManagementView). Admin paths get the unfiltered list |
+| Deleting an equipment category fails with FK error | Postgres won't drop a row that `assets.resource_id` still references | Cascade-delete child assets first, THEN the category. See `deleteResource` in App.tsx |
+| Phantom card vanishes after refresh on cloud-insert failure | Optimistic local insert succeeded but cloud RLS rejected | `addResource` rolls back local state on failure + alerts the admin. Required `insert rooms` / `insert equipment` policies in place |
 
 ---
 
-## 10. What's done (v1.7.0)
+## 10. What's done (v1.8.0)
 
 ### Core booking flows
 - ✅ Bilik Khas booking with time-slot conflict detection
@@ -272,10 +284,13 @@ certbot --nginx -d tempah.altrabird.click
 - ✅ Conflict check correctly ignores cancelled AND returned bookings
 - ✅ Year-agnostic copy + local-timezone date math everywhere
 
-### Inventory + lock
+### Inventory + lock + visibility (admin lifecycle)
 - ✅ Per-asset Edit + Delete (admin only)
-- ✅ Bulk asset actions (lock / unlock / status / delete)
+- ✅ Bulk asset actions (lock / unlock / status / **hide** / **show** / delete)
 - ✅ Lock system 3 levels: room, equipment category, individual asset
+- ✅ **NEW v1.8**: Hidden visibility flag — eye toggle on every card; non-admin can't see hidden rows in pickers, lists, or scan results
+- ✅ **NEW v1.8**: Create new Bilik Khas + new Peralatan ICT category from the admin UI (was previously seed-only)
+- ✅ **NEW v1.8**: Delete category from EditResourceModal "Zon Bahaya" with cascade-aware confirms (child assets get cleaned up automatically)
 - ✅ Per-asset QR sticker + bulk sticker sheet (A4, 18-up)
 
 ### Profiles + portfolio
@@ -413,3 +428,20 @@ curl https://tempah.altrabird.click/manifest.webmanifest
   the logo, drop a new file at `logo-source.png` and run the command.
   A reusable skill at `~/.claude/skills/pwa-logo-swap/` captures this
   end-to-end workflow for any future Vite+PWA project.
+- Visibility filter: when adding a new view that shows rooms/equipment/
+  assets to non-admin users, ALWAYS pass `visibleRooms` /
+  `visibleEquipment` / `visibleAssets` (memoised in App.tsx via
+  `visibleFor()`) — NEVER the raw `rooms` / `equipment` / `assets`.
+  Admin paths get the unfiltered list so they can see + toggle hidden
+  rows. Same rule applies in `ScannedActionSheet` — use
+  `isHiddenFromUser(item, isAdmin)` before exposing actions.
+- Cascade-deletes: equipment categories have an FK from `assets`. If
+  you ever add a new "delete category" entry point, mirror what
+  `deleteResource` does in App.tsx — confirm with child count, delete
+  child assets first, THEN the category. Skipping this gives a Postgres
+  FK violation.
+- New rooms/equipment/assets: `rooms`, `equipment`, AND `assets` now
+  all have INSERT + DELETE RLS policies. If you ever add another
+  resource-like table, add the matching policies BEFORE the UI ships,
+  or `.upsert()` will silently 0-affect (we hit this with image_url
+  before).

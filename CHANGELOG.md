@@ -2,7 +2,85 @@
 
 Major milestones for the TEMPAH project.
 
-## v1.7.0 — In-App QR Scanner, Room QR, New Brand Identity (current)
+## v1.8.0 — Admin Lifecycle: Visibility, Create + Delete Categories (current)
+
+**Admin now has full lifecycle control over rooms and equipment categories
+— previously they could only edit pre-seeded rows. New visibility axis
+sits alongside lock; users can be shown the row + reason (lock) OR not
+shown at all (hidden). All flows wired through one consistent set of
+RLS policies + storage helpers.**
+
+### Visibility (hidden flag)
+
+A third state on every Resource and Asset, distinct from lock:
+
+| Control | What user sees | Use case |
+|---|---|---|
+| **Lock** (existing) | Row visible + amber badge with reason | "Cannot book — being repaired" |
+| **Hidden** (NEW) | Row absent from picker / card / scan | "Take offline during exam season"; "Stage new gear before announcing"; "Retire old unit" |
+
+- Schema: `rooms.hidden`, `equipment.hidden`, `assets.hidden` boolean columns
+- New `src/lib/visibility.ts` with `visibleFor(items, isAdmin)` filter
+- Eye / EyeOff toggle on every card + list row in ResourceManagementView
+  and AssetListModal — admin-only
+- Admin sees hidden cards with slate-dashed border, ~75% opacity, red
+  **"Disorok"** ribbon. Non-admin doesn't see them at all
+- ScannedActionSheet handles hidden case for non-admin: shows generic
+  "Tidak Tersedia" — no name leak, no booking buttons
+- All consumer paths (BookingModal dropdown, BulkLoanModal asset picker,
+  AssetListModal, both ResourceManagementViews) now receive
+  `visibleRooms` / `visibleEquipment` / `visibleAssets` from App.tsx
+- Bulk hide/show added to BulkAssetActionsModal as 2 of 6 grid actions
+  (rose-pink + teal-emerald gradients), with explainer panels
+
+### Create category
+
+Previously rooms + equipment were seeded via migrations only — the UI
+button labelled "Tambah Alatan" actually opened add-individual-unit
+flow inside an existing category, which was confusing.
+
+- New `AddResourceModal` mirrors EditResourceModal layout but pre-allocates
+  a unique id (`<prefix>-<timestamp>-<rand>`) so image uploads can use
+  it as the storage filename and never collide with seeded ids
+- New `insertResourceInCloud(resource)` helper in storage.ts
+- New `addResource(r)` handler in App.tsx — optimistic local insert,
+  rollback + alert on cloud failure
+- "+ Tambah Bilik" button on Bilik Khas page (didn't exist before)
+- "+ Tambah Alatan" → "+ Tambah Kategori" on Peralatan ICT page
+- RLS opened: new `insert rooms` + `insert equipment` policies
+
+### Delete category
+
+- New `deleteResourceInCloud(resource)` helper
+- New `deleteResource(r)` handler with cascade-aware confirms:
+  - **Equipment with N child assets** → warns "Memadam kategori akan
+    PADAM SEMUA N unit tersebut juga", deletes child rows first (FK
+    `assets_resource_id_fkey` would block otherwise), then the category
+  - **Empty equipment category** → simple confirm
+  - **Room** → confirms with note that historical bookings will fall
+    back to raw-id rendering via `resolveResourceName`
+- Returns `boolean` so EditResourceModal knows whether to close
+- Optimistic local removal happens AFTER cloud delete succeeds (different
+  from add/edit) — failed deletes are recoverable, no flash-remove
+- New "Zon Bahaya" section at the bottom of EditResourceModal with
+  rose-bordered "Padam Bilik / Kategori Ini" button + spinner
+- RLS opened: new `delete rooms` + `delete equipment` policies
+
+### Schema additions
+
+- `rooms.hidden boolean not null default false`
+- `equipment.hidden boolean not null default false`
+- `assets.hidden boolean not null default false`
+- Policies: `insert rooms`, `insert equipment`, `delete rooms`, `delete equipment`
+
+### Files added
+
+- `src/lib/visibility.ts` — `visibleFor()` + `isHiddenFromUser()`
+- `src/components/AddResourceModal.tsx` — admin create flow
+
+---
+
+## v1.7.0 — In-App QR Scanner, Room QR, New Brand Identity
 
 **Scan-driven booking is now a first-class flow on both sides — ICT
 loans AND Bilik Khas. Brand identity refreshed with a new TEMPAH logo
