@@ -21,6 +21,7 @@ import {
   updateBookingInCloud,
   bulkReturnLoansInCloud,
   bulkLoanAssetsInCloud,
+  insertResourceInCloud,
 } from './lib/storage';
 import { isAssetLocked, isResourceLocked, lockReasonOf } from './lib/locks';
 import { visibleFor } from './lib/visibility';
@@ -50,6 +51,7 @@ import { EditAssetModal } from './components/EditAssetModal';
 import { BulkAssetActionsModal, BulkAction } from './components/BulkAssetActionsModal';
 import { ReturnLoanModal } from './components/ReturnLoanModal';
 import { BulkReturnModal } from './components/BulkReturnModal';
+import { AddResourceModal } from './components/AddResourceModal';
 import { PWAUpdatePrompt } from './components/PWAUpdatePrompt';
 import { QRScannerModal, parseScannedId } from './components/QRScannerModal';
 import { ScannedActionSheet } from './components/ScannedActionSheet';
@@ -90,6 +92,8 @@ export default function App() {
   const [bulkReturnItems, setBulkReturnItems] = useState<{ booking: Booking; asset?: Asset; category?: Resource }[] | null>(null);
   const [showScanner, setShowScanner] = useState(false);
   const [scannedId, setScannedId] = useState<string | null>(null);
+  /** Open AddResourceModal for either rooms or equipment categories. */
+  const [addResourceFor, setAddResourceFor] = useState<'room' | 'equipment' | null>(null);
 
   useEffect(() => {
     setRooms(localStore.getRooms(INITIAL_ROOMS));
@@ -401,6 +405,30 @@ export default function App() {
       if (!result.ok) {
         console.error('[saveResource] cloud update failed:', result.error);
         alert(`Gagal simpan ke awan: ${result.error}\n\nPerubahan dipaparkan tempatan tetapi tidak disegerakkan. Sila cuba lagi.`);
+      }
+    })();
+  };
+
+  /** Admin-only: create a brand-new room or equipment category. Optimistic
+   *  local insert + cloud insert; on failure we roll back the local state
+   *  AND show an alert so the admin doesn't see a phantom card that
+   *  vanishes on next refresh. */
+  const addResource = (r: Resource) => {
+    if (r.type === 'room') {
+      setRooms((prev) => [...prev, r]);
+    } else {
+      setEquipment((prev) => [...prev, r]);
+    }
+    void (async () => {
+      const result = await insertResourceInCloud(r);
+      if (!result.ok) {
+        console.error('[addResource] cloud insert failed:', result.error);
+        alert(`Gagal tambah ke awan: ${result.error}\n\nKategori telah dialih keluar dari paparan tempatan. Sila cuba lagi.`);
+        if (r.type === 'room') {
+          setRooms((prev) => prev.filter((x) => x.id !== r.id));
+        } else {
+          setEquipment((prev) => prev.filter((x) => x.id !== r.id));
+        }
       }
     })();
   };
@@ -752,6 +780,7 @@ export default function App() {
                   onEdit={(r) => setEditingResource(r)}
                   onShowQR={(r) => setQrRoom(r)}
                   onToggleHidden={toggleResourceHidden}
+                  onAdd={() => setAddResourceFor('room')}
                 />
               )}
               {activeView === 'equipment' && (
@@ -763,10 +792,11 @@ export default function App() {
                     setSelectedResourceId(id);
                     setShowAssetList(true);
                   }}
-                  onAdd={() => {
-                    setSelectedResourceId(null);
-                    setShowAddAssetModal(true);
-                  }}
+                  // "+ Tambah Kategori" creates a NEW equipment category
+                  // (e.g. "Tablet Pelajar"). Adding individual units within
+                  // an existing category is done via the AssetListModal's
+                  // "Tambah Unit Baharu" tile, not here.
+                  onAdd={() => setAddResourceFor('equipment')}
                   isAdmin={isAdmin}
                   onEdit={(r) => setEditingResource(r)}
                   onBulkLoan={() => setShowBulkLoanModal(true)}
@@ -1026,6 +1056,15 @@ export default function App() {
           return await bulkMarkLoansReturned(ids, notes);
         }}
       />
+
+      {addResourceFor && (
+        <AddResourceModal
+          open={addResourceFor !== null}
+          type={addResourceFor}
+          onClose={() => setAddResourceFor(null)}
+          onSubmit={addResource}
+        />
+      )}
 
       <PWAUpdatePrompt />
 

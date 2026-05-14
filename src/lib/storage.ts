@@ -168,16 +168,41 @@ export async function fetchEquipmentFromCloud(): Promise<Resource[] | null> {
 }
 
 /**
+ * Insert a brand-new room or equipment category.
+ *
+ * Used by the admin "Tambah Bilik" / "Tambah Kategori" flows. Returns the
+ * usual ok/error envelope; on RLS rejection or PK conflict the caller
+ * should roll back the optimistic local state.
+ */
+export async function insertResourceInCloud(resource: Resource): Promise<{ ok: boolean; error?: string }> {
+  if (!isSupabaseEnabled || !supabase) {
+    return { ok: false, error: 'Supabase belum dikonfig.' };
+  }
+  const table = resource.type === 'room' ? 'rooms' : 'equipment';
+  const row: Record<string, any> = {
+    id: resource.id,
+    name: resource.name,
+    description: resource.description ?? null,
+    image_url: resource.imageUrl ?? null,
+    locked_reason: resource.lockedReason ?? null,
+    hidden: resource.hidden ?? false,
+  };
+  if (resource.type === 'room') row.capacity = resource.capacity ?? null;
+  else row.quantity = resource.quantity ?? null;
+
+  const { error } = await supabase.from(table).insert(row);
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
+}
+
+/**
  * Persist room / equipment edits to the cloud.
  *
- * Rooms and equipment categories are seeded via migrations and never
- * created from the UI, so we issue an UPDATE rather than an UPSERT.
- *
- * This matters: the live DB only has UPDATE + SELECT row-level policies
- * for `rooms` and `equipment` (no INSERT). Supabase's `.upsert()` is
- * `INSERT ... ON CONFLICT DO UPDATE` under the hood, which RLS *silently*
- * rejects when the INSERT policy is missing — so image URLs were being
- * dropped without surfacing an error to the user.
+ * For pre-existing rows (seeded or admin-created). Uses `.update()` rather
+ * than `.upsert()` because the latter runs `INSERT ... ON CONFLICT DO
+ * UPDATE` under the hood, and RLS used to silently filter such inserts
+ * before we added explicit INSERT policies. Treating 0 affected rows as
+ * an error here also catches typos / wrong ids early.
  */
 export async function upsertResourceToCloud(resource: Resource): Promise<{ ok: boolean; error?: string }> {
   if (!isSupabaseEnabled || !supabase) {

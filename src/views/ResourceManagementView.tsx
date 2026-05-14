@@ -81,12 +81,15 @@ export function ResourceManagementView({ resources, title, type, onAction, onAdd
                 <Package size={14} /> <span className="hidden sm:inline">Pinjam</span> Pukal
               </button>
             )}
-            {isAdmin && (
+            {isAdmin && onAdd && (
               <button
-                onClick={onAdd || (() => {})}
+                onClick={onAdd}
                 className="flex items-center gap-2 px-3 md:px-4 py-2 bg-blue-600 text-white rounded-lg text-[10px] font-bold uppercase tracking-widest hover:bg-blue-700 transition-all shadow-md shadow-blue-500/20"
+                title={type === 'room'
+                  ? 'Daftar bilik khas baharu (admin)'
+                  : 'Daftar kategori peralatan baharu (admin)'}
               >
-                <Plus size={14} /> <span className="hidden sm:inline">Tambah</span> {type === 'room' ? 'Bilik' : 'Alatan'}
+                <Plus size={14} /> <span className="hidden sm:inline">Tambah</span> {type === 'room' ? 'Bilik' : 'Kategori'}
               </button>
             )}
           </div>
