@@ -23,6 +23,7 @@ import {
   bulkLoanAssetsInCloud,
 } from './lib/storage';
 import { isAssetLocked, isResourceLocked, lockReasonOf } from './lib/locks';
+import { visibleFor } from './lib/visibility';
 import { isSupabaseEnabled } from './lib/supabase';
 
 import { DashboardView } from './views/DashboardView';
@@ -466,6 +467,24 @@ export default function App() {
 
   const isAdmin = profile?.role === 'admin';
 
+  // Admin-controlled visibility. Non-admin users only see rows where
+  // `hidden !== true`. Admin sees everything (with an EyeOff indicator
+  // on the cards so they know which ones are hidden from users).
+  const visibleRooms = useMemo(() => visibleFor(rooms, isAdmin), [rooms, isAdmin]);
+  const visibleEquipment = useMemo(() => visibleFor(equipment, isAdmin), [equipment, isAdmin]);
+  const visibleAssets = useMemo(() => visibleFor(assets, isAdmin), [assets, isAdmin]);
+
+  /** Admin-only quick toggle: flip a Resource's `hidden` flag and
+   *  persist. The lock-reason / image / capacity are untouched. */
+  const toggleResourceHidden = (r: Resource) => {
+    saveResource({ ...r, hidden: !r.hidden });
+  };
+
+  /** Admin-only quick toggle for an individual asset. */
+  const toggleAssetHidden = (a: Asset) => {
+    saveAsset({ ...a, hidden: !a.hidden });
+  };
+
   const navItems = [
     { id: 'dashboard' as View, label: 'Utama', icon: LayoutDashboard },
     { id: 'portfolio' as View, label: 'Portfolio Saya', icon: UserCircle2 },
@@ -723,18 +742,19 @@ export default function App() {
               )}
               {activeView === 'rooms' && (
                 <ResourceManagementView
-                  resources={rooms}
+                  resources={visibleRooms}
                   title="Bilik Khas"
                   type="room"
                   onAction={(id) => openBookingModal({ resourceId: id, resourceType: 'room' })}
                   isAdmin={isAdmin}
                   onEdit={(r) => setEditingResource(r)}
                   onShowQR={(r) => setQrRoom(r)}
+                  onToggleHidden={toggleResourceHidden}
                 />
               )}
               {activeView === 'equipment' && (
                 <ResourceManagementView
-                  resources={equipment}
+                  resources={visibleEquipment}
                   title="Peralatan ICT"
                   type="equipment"
                   onAction={(id) => {
@@ -748,6 +768,7 @@ export default function App() {
                   isAdmin={isAdmin}
                   onEdit={(r) => setEditingResource(r)}
                   onBulkLoan={() => setShowBulkLoanModal(true)}
+                  onToggleHidden={toggleResourceHidden}
                 />
               )}
               {activeView === 'returns' && (
@@ -861,8 +882,8 @@ export default function App() {
       <BookingModal
         open={showBookingModal}
         onClose={() => setShowBookingModal(false)}
-        rooms={rooms}
-        equipment={equipment}
+        rooms={visibleRooms}
+        equipment={visibleEquipment}
         profile={profile}
         initial={bookingInitial}
         onSubmit={submitBooking}
@@ -871,8 +892,8 @@ export default function App() {
       <AssetListModal
         open={showAssetList}
         resourceId={selectedResourceId}
-        assets={assets}
-        equipment={equipment}
+        assets={visibleAssets}
+        equipment={visibleEquipment}
         isAdmin={isAdmin}
         onClose={() => setShowAssetList(false)}
         onPick={(asset) => {
@@ -888,6 +909,7 @@ export default function App() {
         }}
         onLockAsset={(asset) => setLockingAsset(asset)}
         onEditAsset={(asset) => setEditingAsset(asset)}
+        onToggleHidden={toggleAssetHidden}
         onBulkActions={() => {
           setShowAssetList(false);
           setShowBulkAssetActions(true);
@@ -934,8 +956,8 @@ export default function App() {
 
       <BulkLoanModal
         open={showBulkLoanModal}
-        assets={assets}
-        equipment={equipment}
+        assets={visibleAssets}
+        equipment={visibleEquipment}
         profile={profile}
         onClose={() => setShowBulkLoanModal(false)}
         onSubmit={submitBulkLoan}

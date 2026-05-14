@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
 import {
   DoorOpen, Laptop, Plus, Pencil, Package, Lock, AlertTriangle,
-  LayoutGrid, List as ListIcon, QrCode,
+  LayoutGrid, List as ListIcon, QrCode, Eye, EyeOff,
 } from 'lucide-react';
 import { Resource, ResourceType } from '../types';
 import { isResourceLocked, lockReasonOf } from '../lib/locks';
@@ -20,6 +20,9 @@ interface Props {
   onBulkLoan?: () => void;
   /** Admin-only: open QR sticker preview for a room. Only used when `type === 'room'`. */
   onShowQR?: (resource: Resource) => void;
+  /** Admin-only: flip the resource's `hidden` flag. When hidden, regular
+   *  users can't see this row in pickers / cards / scan results. */
+  onToggleHidden?: (resource: Resource) => void;
 }
 
 const VIEW_MODE_KEY = 'tempah_resource_view_mode';
@@ -33,7 +36,7 @@ function loadViewMode(): ViewMode {
   }
 }
 
-export function ResourceManagementView({ resources, title, type, onAction, onAdd, isAdmin, onEdit, onBulkLoan, onShowQR }: Props) {
+export function ResourceManagementView({ resources, title, type, onAction, onAdd, isAdmin, onEdit, onBulkLoan, onShowQR, onToggleHidden }: Props) {
   const [viewMode, setViewMode] = useState<ViewMode>(loadViewMode);
 
   useEffect(() => {
@@ -110,6 +113,7 @@ export function ResourceManagementView({ resources, title, type, onAction, onAdd
           isAdmin={isAdmin}
           onEdit={onEdit}
           onShowQR={onShowQR}
+          onToggleHidden={onToggleHidden}
         />
       ) : (
         <ListView
@@ -119,6 +123,7 @@ export function ResourceManagementView({ resources, title, type, onAction, onAdd
           isAdmin={isAdmin}
           onEdit={onEdit}
           onShowQR={onShowQR}
+          onToggleHidden={onToggleHidden}
         />
       )}
     </div>
@@ -129,7 +134,7 @@ export function ResourceManagementView({ resources, title, type, onAction, onAdd
 // Card view (default)
 // ---------------------------------------------------------------------------
 function CardGrid({
-  resources, type, onAction, isAdmin, onEdit, onShowQR,
+  resources, type, onAction, isAdmin, onEdit, onShowQR, onToggleHidden,
 }: {
   resources: Resource[];
   type: ResourceType;
@@ -137,12 +142,14 @@ function CardGrid({
   isAdmin?: boolean;
   onEdit?: (r: Resource) => void;
   onShowQR?: (r: Resource) => void;
+  onToggleHidden?: (r: Resource) => void;
 }) {
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
       {resources.map((r, i) => {
         const locked = isResourceLocked(r);
         const reason = lockReasonOf(r);
+        const hidden = r.hidden === true;
         return (
         <motion.div
           key={r.id}
@@ -150,7 +157,9 @@ function CardGrid({
           animate={{ opacity: 1, scale: 1 }}
           transition={{ delay: i * 0.04 }}
           className={`rounded-2xl border shadow-sm group transition-all relative overflow-hidden flex flex-col ${
-            locked
+            hidden
+              ? 'bg-slate-50 border-slate-300 border-dashed opacity-75'
+              : locked
               ? 'bg-amber-50/30 border-amber-200'
               : 'bg-white border-slate-200 hover:border-blue-500 hover:shadow-md'
           }`}
@@ -207,6 +216,28 @@ function CardGrid({
               >
                 <QrCode size={12} />
               </button>
+            )}
+            {/* Admin-only visibility toggle — flips `hidden` flag.
+                Hidden = users can't see this card at all. Different from
+                lock (which shows it but blocks booking). */}
+            {isAdmin && onToggleHidden && (
+              <button
+                onClick={(e) => { e.stopPropagation(); onToggleHidden(r); }}
+                className={`absolute top-3 ${type === 'room' && onShowQR ? 'left-[4.75rem]' : 'left-11'} bg-white/95 backdrop-blur p-1.5 rounded-md shadow-sm border border-white/40 transition-all ${
+                  hidden
+                    ? 'text-rose-600 hover:bg-rose-50'
+                    : 'text-slate-500 hover:text-emerald-600 hover:bg-white'
+                }`}
+                title={hidden ? 'Tunjukkan kepada pengguna' : 'Sembunyikan dari pengguna'}
+              >
+                {hidden ? <EyeOff size={12} /> : <Eye size={12} />}
+              </button>
+            )}
+            {/* Hidden-state ribbon (admin only — non-admin doesn't see this card at all) */}
+            {hidden && (
+              <div className="absolute bottom-3 right-3 bg-rose-500 text-white px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-widest shadow-md flex items-center gap-1">
+                <EyeOff size={10} /> Disorok
+              </div>
             )}
           </div>
 
@@ -273,7 +304,7 @@ function CardGrid({
 // List view (compact)
 // ---------------------------------------------------------------------------
 function ListView({
-  resources, type, onAction, isAdmin, onEdit, onShowQR,
+  resources, type, onAction, isAdmin, onEdit, onShowQR, onToggleHidden,
 }: {
   resources: Resource[];
   type: ResourceType;
@@ -281,6 +312,7 @@ function ListView({
   isAdmin?: boolean;
   onEdit?: (r: Resource) => void;
   onShowQR?: (r: Resource) => void;
+  onToggleHidden?: (r: Resource) => void;
 }) {
   return (
     <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
@@ -335,6 +367,11 @@ function ListView({
                     <span className={`w-1.5 h-1.5 rounded-full ${locked ? 'bg-amber-500' : 'bg-emerald-500'}`} />
                     {locked ? 'Dikunci' : 'Aktif'}
                   </span>
+                  {r.hidden && (
+                    <span className="text-[9px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded bg-rose-50 text-rose-700 border border-rose-100 flex items-center gap-1">
+                      <EyeOff size={10} /> Disorok
+                    </span>
+                  )}
                 </div>
                 {locked ? (
                   <p className="text-[11px] text-amber-700 mt-0.5 truncate flex items-center gap-1">
@@ -350,6 +387,19 @@ function ListView({
 
               {/* Actions */}
               <div className="flex items-center gap-1 shrink-0">
+                {isAdmin && onToggleHidden && (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); onToggleHidden(r); }}
+                    className={`p-2 rounded-lg transition-all ${
+                      r.hidden
+                        ? 'text-rose-600 bg-rose-50 hover:bg-rose-100'
+                        : 'text-slate-400 hover:bg-emerald-50 hover:text-emerald-600'
+                    }`}
+                    title={r.hidden ? 'Tunjukkan kepada pengguna' : 'Sembunyikan dari pengguna'}
+                  >
+                    {r.hidden ? <EyeOff size={14} /> : <Eye size={14} />}
+                  </button>
+                )}
                 {isAdmin && type === 'room' && onShowQR && (
                   <button
                     onClick={(e) => { e.stopPropagation(); onShowQR(r); }}

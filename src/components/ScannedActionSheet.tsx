@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { Asset, Booking, Profile, Resource } from '../types';
 import { isAssetLocked, isResourceLocked, lockReasonOf } from '../lib/locks';
+import { isHiddenFromUser } from '../lib/visibility';
 import { todayLocalISO } from '../lib/dates';
 
 interface Props {
@@ -42,7 +43,11 @@ export function ScannedActionSheet({
     if (!scannedId) return { kind: 'none' as const };
     const asset = assets.find((a) => a.id === scannedId);
     if (asset) {
+      // Hide from non-admin if admin marked the asset (or its category) hidden
       const category = equipment.find((e) => e.id === asset.resourceId) ?? null;
+      if (isHiddenFromUser(asset, isAdmin) || isHiddenFromUser(category, isAdmin)) {
+        return { kind: 'hidden' as const, kindLabel: 'Peralatan ICT' as const };
+      }
       // Active loan = confirmed booking that hasn't been returned/cancelled
       const today = todayLocalISO();
       const activeLoan = bookings.find((b) =>
@@ -54,11 +59,21 @@ export function ScannedActionSheet({
       return { kind: 'asset' as const, asset, category, activeLoan };
     }
     const room = rooms.find((r) => r.id === scannedId);
-    if (room) return { kind: 'room' as const, room };
+    if (room) {
+      if (isHiddenFromUser(room, isAdmin)) {
+        return { kind: 'hidden' as const, kindLabel: 'Bilik Khas' as const };
+      }
+      return { kind: 'room' as const, room };
+    }
     const cat = equipment.find((e) => e.id === scannedId);
-    if (cat) return { kind: 'category' as const, category: cat };
+    if (cat) {
+      if (isHiddenFromUser(cat, isAdmin)) {
+        return { kind: 'hidden' as const, kindLabel: 'Kategori Peralatan' as const };
+      }
+      return { kind: 'category' as const, category: cat };
+    }
     return { kind: 'unknown' as const, raw: scannedId };
-  }, [scannedId, assets, rooms, equipment, bookings]);
+  }, [scannedId, assets, rooms, equipment, bookings, isAdmin]);
 
   return (
     <AnimatePresence>
@@ -125,6 +140,11 @@ export function ScannedActionSheet({
               {/* Equipment category path (less common but possible if QR encodes the category) */}
               {resolved.kind === 'category' && (
                 <CategoryCard category={resolved.category} />
+              )}
+
+              {/* Hidden from this user — admin marked it private */}
+              {resolved.kind === 'hidden' && (
+                <HiddenCard kindLabel={resolved.kindLabel} />
               )}
 
               {/* Unknown id */}
@@ -312,6 +332,24 @@ function UnknownCard({ raw }: { raw: string }) {
         Sistem tidak menemui unit, bilik atau kategori sepadan dengan kod ini.
       </p>
       <p className="text-[10px] font-mono text-slate-400 bg-slate-50 px-2 py-1 rounded inline-block">{raw}</p>
+    </div>
+  );
+}
+
+/** Admin marked this resource as hidden from regular users. We don't
+ *  reveal the resource's name or details — just a friendly "tidak
+ *  tersedia" message so the user doesn't think the QR is broken. */
+function HiddenCard({ kindLabel }: { kindLabel: string }) {
+  return (
+    <div className="space-y-3 text-center py-4">
+      <div className="w-14 h-14 mx-auto rounded-full bg-slate-100 text-slate-500 flex items-center justify-center">
+        <AlertTriangle size={22} />
+      </div>
+      <p className="text-sm font-bold text-slate-800">Tidak Tersedia</p>
+      <p className="text-[11px] text-slate-500 leading-relaxed">
+        {kindLabel} ini tidak tersedia untuk tempahan/pinjaman pada masa ini.
+        Sila hubungi pentadbir jika anda perlukan akses.
+      </p>
     </div>
   );
 }

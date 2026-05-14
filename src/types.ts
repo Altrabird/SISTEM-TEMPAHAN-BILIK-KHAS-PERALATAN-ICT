@@ -23,6 +23,11 @@ export interface Asset {
   imageUrl?: string;
   status: 'available' | 'borrowed' | 'maintenance';
   lockedReason?: string;
+  /** Admin-only visibility toggle. When true, regular users cannot see
+   *  this unit in pickers / cards / scan results. Admin always sees it
+   *  with a "hidden" indicator. Independent of `lockedReason` (which
+   *  shows the unit but blocks booking with a reason). */
+  hidden?: boolean;
 }
 
 export interface Resource {
@@ -34,6 +39,8 @@ export interface Resource {
   capacity?: number;
   quantity?: number;
   lockedReason?: string;
+  /** Admin-only visibility toggle. See Asset.hidden for semantics. */
+  hidden?: boolean;
 }
 
 export interface Booking {

@@ -135,6 +135,7 @@ function rowToResource(row: any, type: 'room' | 'equipment'): Resource {
     capacity: row.capacity ?? undefined,
     quantity: row.quantity ?? undefined,
     lockedReason: row.locked_reason ?? undefined,
+    hidden: row.hidden ?? false,
   };
 }
 
@@ -148,6 +149,7 @@ function rowToAsset(row: any): Asset {
     imageUrl: row.image_url ?? undefined,
     status: row.status ?? 'available',
     lockedReason: row.locked_reason ?? undefined,
+    hidden: row.hidden ?? false,
   };
 }
 
@@ -187,6 +189,7 @@ export async function upsertResourceToCloud(resource: Resource): Promise<{ ok: b
     description: resource.description ?? null,
     image_url: resource.imageUrl ?? null,
     locked_reason: resource.lockedReason ?? null,
+    hidden: resource.hidden ?? false,
   };
   if (resource.type === 'room') row.capacity = resource.capacity ?? null;
   else row.quantity = resource.quantity ?? null;
@@ -226,6 +229,7 @@ export async function upsertAssetToCloud(asset: Asset): Promise<{ ok: boolean; e
     image_url: asset.imageUrl ?? null,
     status: asset.status,
     locked_reason: asset.lockedReason ?? null,
+    hidden: asset.hidden ?? false,
   });
   if (error) return { ok: false, error: error.message };
   return { ok: true };

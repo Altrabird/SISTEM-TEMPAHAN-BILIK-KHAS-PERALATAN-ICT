@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, Plus, Info, Laptop, QrCode, Package, Lock, AlertTriangle, Pencil, Settings2, Printer, Loader2 } from 'lucide-react';
+import { X, Plus, Info, Laptop, QrCode, Package, Lock, AlertTriangle, Pencil, Settings2, Printer, Loader2, Eye, EyeOff } from 'lucide-react';
 import { Asset, Resource } from '../types';
 import { isAssetLocked, isResourceLocked, lockReasonOf } from '../lib/locks';
 import { openBulkQrSticker } from '../lib/qr';
@@ -19,10 +19,13 @@ interface Props {
   onLockAsset?: (asset: Asset) => void;
   onEditAsset?: (asset: Asset) => void;
   onBulkActions?: () => void;
+  /** Admin-only: flip an asset's `hidden` flag. Hidden assets disappear
+   *  from regular users' pickers and scan results. */
+  onToggleHidden?: (asset: Asset) => void;
 }
 
 export function AssetListModal({
-  open, resourceId, assets, equipment, isAdmin, onClose, onPick, onAdd, onShowQR, onBulkLoan, onLockAsset, onEditAsset, onBulkActions,
+  open, resourceId, assets, equipment, isAdmin, onClose, onPick, onAdd, onShowQR, onBulkLoan, onLockAsset, onEditAsset, onBulkActions, onToggleHidden,
 }: Props) {
   const [printingBulkQr, setPrintingBulkQr] = useState(false);
 
@@ -120,11 +123,14 @@ export function AssetListModal({
                 {filtered.map((asset) => {
                   const locked = isAssetLocked(asset) || categoryLocked;
                   const reason = isAssetLocked(asset) ? lockReasonOf(asset) : categoryReason;
+                  const hidden = asset.hidden === true;
                   return (
                   <motion.div
                     key={asset.id}
                     className={`rounded-xl border overflow-hidden shadow-sm transition-all flex flex-col ${
-                      locked
+                      hidden
+                        ? 'bg-slate-50 border-slate-300 border-dashed opacity-75'
+                        : locked
                         ? 'bg-amber-50/30 border-amber-200'
                         : 'bg-white border-slate-200 hover:border-blue-500'
                     }`}
@@ -162,6 +168,17 @@ export function AssetListModal({
                         </span>
                       </div>
                       <div className="absolute top-3 right-3 flex gap-1">
+                        {isAdmin && onToggleHidden && (
+                          <button
+                            onClick={() => onToggleHidden(asset)}
+                            className={`backdrop-blur p-1.5 rounded-md text-white hover:scale-110 transition-all ${
+                              hidden ? 'bg-rose-600/90 hover:bg-rose-700' : 'bg-slate-900/80 hover:bg-slate-900'
+                            }`}
+                            title={hidden ? 'Tunjukkan kepada pengguna' : 'Sembunyikan dari pengguna'}
+                          >
+                            {hidden ? <EyeOff size={13} /> : <Eye size={13} />}
+                          </button>
+                        )}
                         {isAdmin && onEditAsset && (
                           <button
                             onClick={() => onEditAsset(asset)}
@@ -192,6 +209,11 @@ export function AssetListModal({
                           </button>
                         )}
                       </div>
+                      {hidden && (
+                        <div className="absolute bottom-3 right-3 bg-rose-500 text-white px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-widest shadow-md flex items-center gap-1">
+                          <EyeOff size={10} /> Disorok
+                        </div>
+                      )}
                     </div>
                     <div className="p-4 flex-1">
                       <h3 className="font-bold text-base text-slate-800">{asset.name}</h3>
