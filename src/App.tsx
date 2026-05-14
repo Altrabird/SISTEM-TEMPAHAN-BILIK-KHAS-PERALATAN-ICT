@@ -22,6 +22,7 @@ import {
   bulkReturnLoansInCloud,
   bulkLoanAssetsInCloud,
   insertResourceInCloud,
+  deleteResourceInCloud,
 } from './lib/storage';
 import { isAssetLocked, isResourceLocked, lockReasonOf } from './lib/locks';
 import { visibleFor } from './lib/visibility';
@@ -407,6 +408,62 @@ export default function App() {
         alert(`Gagal simpan ke awan: ${result.error}\n\nPerubahan dipaparkan tempatan tetapi tidak disegerakkan. Sila cuba lagi.`);
       }
     })();
+  };
+
+  /** Admin-only: delete a room or equipment category from the cloud.
+   *
+   *  Cascades depend on the type:
+   *  - Equipment: `assets.resource_id` has an FK pointing here, so we
+   *    must delete child assets first or Postgres rejects the delete.
+   *    Confirms with the admin and shows the unit count before doing it.
+   *  - Rooms: no FK pointing in, so just confirm and delete. Historical
+   *    bookings will resolve via `resolveResourceName` raw-id fallback.
+   *
+   *  Returns the modal-close signal: `true` on success so the caller
+   *  can dismiss its UI. Optimistic local removal happens AFTER the
+   *  cloud delete succeeds (different from add/edit) — a failed delete
+   *  is recoverable, so we don't want to flash-remove the card. */
+  const deleteResource = async (r: Resource): Promise<boolean> => {
+    if (r.type === 'equipment') {
+      const childAssets = assets.filter((a) => a.resourceId === r.id);
+      const note = childAssets.length > 0
+        ? `Kategori "${r.name}" mengandungi ${childAssets.length} unit. Memadam kategori akan PADAM SEMUA unit tersebut juga.\n\n`
+        : `Padam kategori "${r.name}"?\n\n`;
+      const ok = confirm(`${note}Tindakan ini TIDAK BOLEH dipulihkan. Teruskan?`);
+      if (!ok) return false;
+
+      // Cascade-delete child assets first (FK constraint)
+      if (childAssets.length > 0) {
+        for (const a of childAssets) {
+          const dr = await deleteAssetFromCloud(a.id);
+          if (!dr.ok) {
+            alert(`Gagal padam unit "${a.name}": ${dr.error}\n\nKategori tidak dipadam.`);
+            return false;
+          }
+        }
+        setAssets((prev) => prev.filter((a) => a.resourceId !== r.id));
+      }
+    } else {
+      const ok = confirm(
+        `Padam bilik "${r.name}"?\n\n` +
+        `Rekod tempahan lama akan kekal sebagai sejarah, tetapi akan menunjuk ID mentah selepas dipadam.\n\n` +
+        `Tindakan ini tidak boleh dipulihkan. Teruskan?`,
+      );
+      if (!ok) return false;
+    }
+
+    const result = await deleteResourceInCloud(r);
+    if (!result.ok) {
+      console.error('[deleteResource] cloud delete failed:', result.error);
+      alert(`Gagal padam: ${result.error}`);
+      return false;
+    }
+    if (r.type === 'room') {
+      setRooms((prev) => prev.filter((x) => x.id !== r.id));
+    } else {
+      setEquipment((prev) => prev.filter((x) => x.id !== r.id));
+    }
+    return true;
   };
 
   /** Admin-only: create a brand-new room or equipment category. Optimistic
@@ -971,6 +1028,7 @@ export default function App() {
         resource={editingResource}
         onClose={() => setEditingResource(null)}
         onSave={saveResource}
+        onDelete={isAdmin ? deleteResource : undefined}
       />
 
       <LoanModal

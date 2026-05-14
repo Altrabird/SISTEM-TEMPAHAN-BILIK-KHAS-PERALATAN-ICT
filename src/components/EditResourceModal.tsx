@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
-  X, Save, DoorOpen, Laptop, Image as ImageIcon, Camera, Trash2, Loader2, AlertCircle, Lock, Unlock
+  X, Save, DoorOpen, Laptop, Image as ImageIcon, Camera, Trash2, Loader2, AlertCircle, Lock, Unlock, AlertTriangle
 } from 'lucide-react';
 import { Resource } from '../types';
 import { uploadResourceImage } from '../lib/storage';
@@ -12,13 +12,17 @@ interface Props {
   resource: Resource | null;
   onClose: () => void;
   onSave: (r: Resource) => void;
+  /** Admin-only delete callback. Returns `true` if the delete went
+   *  through (so the modal closes); `false` if cancelled or failed. */
+  onDelete?: (r: Resource) => Promise<boolean>;
 }
 
-export function EditResourceModal({ open, resource, onClose, onSave }: Props) {
+export function EditResourceModal({ open, resource, onClose, onSave, onDelete }: Props) {
   const [draft, setDraft] = useState<Resource | null>(resource);
   const [savedFlash, setSavedFlash] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const galleryRef = useRef<HTMLInputElement>(null);
   const cameraRef = useRef<HTMLInputElement>(null);
@@ -28,6 +32,7 @@ export function EditResourceModal({ open, resource, onClose, onSave }: Props) {
       setDraft(resource);
       setSavedFlash(false);
       setUploadError(null);
+      setDeleting(false);
     }
   }, [open, resource]);
 
@@ -304,7 +309,7 @@ export function EditResourceModal({ open, resource, onClose, onSave }: Props) {
               <div className="flex items-center gap-3 pt-2">
                 <button
                   type="submit"
-                  disabled={!draft.name.trim() || uploading}
+                  disabled={!draft.name.trim() || uploading || deleting}
                   className="flex-1 bg-blue-600 text-white py-3 rounded-lg text-sm font-bold uppercase tracking-widest hover:bg-blue-700 transition-all shadow-lg shadow-blue-500/25 active:scale-[0.98] flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   <Save size={14} /> {savedFlash ? 'Disimpan!' : 'Simpan'}
@@ -312,11 +317,44 @@ export function EditResourceModal({ open, resource, onClose, onSave }: Props) {
                 <button
                   type="button"
                   onClick={onClose}
-                  className="px-5 py-3 rounded-lg text-xs font-bold uppercase tracking-widest text-slate-600 hover:bg-slate-100 transition-all"
+                  disabled={deleting}
+                  className="px-5 py-3 rounded-lg text-xs font-bold uppercase tracking-widest text-slate-600 hover:bg-slate-100 transition-all disabled:opacity-40"
                 >
                   Batal
                 </button>
               </div>
+
+              {/* Danger zone — delete the entire room/category. Cascades
+                  for equipment (deletes child assets too); rooms only
+                  affect historical bookings via raw-id fallback. */}
+              {onDelete && (
+                <div className="mt-4 pt-4 border-t border-rose-100">
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-rose-700 mb-2 flex items-center gap-1.5">
+                    <AlertTriangle size={11} /> Zon Bahaya
+                  </p>
+                  <button
+                    type="button"
+                    disabled={deleting || uploading}
+                    onClick={async () => {
+                      setDeleting(true);
+                      const ok = await onDelete(draft);
+                      setDeleting(false);
+                      if (ok) onClose();
+                    }}
+                    className="w-full bg-white border border-rose-300 text-rose-700 hover:bg-rose-50 py-2.5 rounded-lg text-xs font-bold uppercase tracking-widest transition-all flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    {deleting ? <Loader2 size={13} className="animate-spin" /> : <Trash2 size={13} />}
+                    {deleting
+                      ? 'Memadam...'
+                      : `Padam ${isRoom ? 'Bilik' : 'Kategori'} Ini`}
+                  </button>
+                  <p className="text-[10px] text-rose-600/80 mt-2 leading-snug">
+                    {isRoom
+                      ? 'Bilik akan hilang sepenuhnya dari sistem. Rekod tempahan lama kekal sebagai sejarah.'
+                      : 'Semua unit dalam kategori ini akan dipadam sekali. Tindakan tidak boleh dipulihkan.'}
+                  </p>
+                </div>
+              )}
             </form>
 
             <style>{`

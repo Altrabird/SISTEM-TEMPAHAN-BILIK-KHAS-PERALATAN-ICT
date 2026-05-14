@@ -168,6 +168,27 @@ export async function fetchEquipmentFromCloud(): Promise<Resource[] | null> {
 }
 
 /**
+ * Delete a room or equipment category from the cloud.
+ *
+ * Note: for equipment categories, the caller MUST first delete any
+ * `assets` rows that reference this category — otherwise the FK
+ * constraint `assets_resource_id_fkey` will block the delete. Rooms have
+ * no FK pointing in, so the delete always succeeds (any historical
+ * bookings will then resolve via raw id fallback in resolveResourceName).
+ */
+export async function deleteResourceInCloud(
+  resource: Pick<Resource, 'id' | 'type'>,
+): Promise<{ ok: boolean; error?: string }> {
+  if (!isSupabaseEnabled || !supabase) {
+    return { ok: false, error: 'Supabase belum dikonfig.' };
+  }
+  const table = resource.type === 'room' ? 'rooms' : 'equipment';
+  const { error } = await supabase.from(table).delete().eq('id', resource.id);
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
+}
+
+/**
  * Insert a brand-new room or equipment category.
  *
  * Used by the admin "Tambah Bilik" / "Tambah Kategori" flows. Returns the
