@@ -437,6 +437,8 @@ export default function App() {
           if (action.kind === 'lock') updated = { ...a, lockedReason: action.reason };
           else if (action.kind === 'unlock') updated = { ...a, lockedReason: undefined };
           else if (action.kind === 'status') updated = { ...a, status: action.status };
+          else if (action.kind === 'hide') updated = { ...a, hidden: true };
+          else if (action.kind === 'show') updated = { ...a, hidden: false };
           const r = await upsertAssetToCloud(updated);
           if (r.ok) {
             setAssets((prev) => prev.map((x) => (x.id === a.id ? updated : x)));

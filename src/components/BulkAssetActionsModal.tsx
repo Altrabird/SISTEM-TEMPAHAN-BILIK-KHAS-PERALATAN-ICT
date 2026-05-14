@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   X, AlertCircle, Laptop, ArrowRight, ArrowLeft, CheckSquare, Square, Search,
-  Lock, Unlock, Trash2, Settings2, Wrench, ShieldCheck, Loader2,
+  Lock, Unlock, Trash2, Settings2, Wrench, ShieldCheck, Loader2, Eye, EyeOff,
 } from 'lucide-react';
 import { Asset, Resource } from '../types';
 
@@ -21,12 +21,16 @@ export type BulkAction =
   | { kind: 'lock'; reason: string }
   | { kind: 'unlock' }
   | { kind: 'status'; status: Asset['status'] }
+  | { kind: 'hide' }
+  | { kind: 'show' }
   | { kind: 'delete' };
 
 const ACTION_DEFS = [
   { kind: 'lock' as const, label: 'Kunci Unit', icon: Lock, tone: 'from-amber-500 to-orange-600' },
   { kind: 'unlock' as const, label: 'Buka Kunci', icon: Unlock, tone: 'from-emerald-500 to-green-600' },
   { kind: 'status' as const, label: 'Tukar Status', icon: Settings2, tone: 'from-indigo-500 to-blue-600' },
+  { kind: 'hide' as const, label: 'Sorok dari Pengguna', icon: EyeOff, tone: 'from-rose-500 to-pink-600' },
+  { kind: 'show' as const, label: 'Tunjuk kepada Pengguna', icon: Eye, tone: 'from-teal-500 to-emerald-600' },
   { kind: 'delete' as const, label: 'Padam Unit', icon: Trash2, tone: 'from-rose-500 to-red-600' },
 ];
 
@@ -133,6 +137,8 @@ export function BulkAssetActionsModal({ open, resourceId, assets, equipment, onC
     }
     if (actionKind === 'unlock') return { kind: 'unlock' };
     if (actionKind === 'status') return { kind: 'status', status: statusValue };
+    if (actionKind === 'hide') return { kind: 'hide' };
+    if (actionKind === 'show') return { kind: 'show' };
     if (actionKind === 'delete') return { kind: 'delete' };
     return null;
   };
@@ -153,6 +159,8 @@ export function BulkAssetActionsModal({ open, resourceId, assets, equipment, onC
       case 'lock': return 'Kunci';
       case 'unlock': return 'Buka kunci';
       case 'status': return 'Tukar status';
+      case 'hide': return 'Sorok';
+      case 'show': return 'Tunjuk';
       case 'delete': return 'Padam';
       default: return '';
     }
@@ -333,7 +341,7 @@ export function BulkAssetActionsModal({ open, resourceId, assets, equipment, onC
 
                 <div className="space-y-2">
                   <label className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Pilih Tindakan</label>
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                     {ACTION_DEFS.map((a) => {
                       const Icon = a.icon;
                       const active = actionKind === a.kind;
@@ -420,6 +428,30 @@ export function BulkAssetActionsModal({ open, resourceId, assets, equipment, onC
                       <p className="font-bold mb-1">Amaran: Tindakan tak boleh dipulihkan</p>
                       {pickedAssets.length} unit akan dipadam KEKAL dari sistem dan Supabase.
                       Rekod tempahan lama kekal sebagai sejarah.
+                    </div>
+                  </div>
+                )}
+
+                {actionKind === 'hide' && (
+                  <div className="bg-slate-50 border border-slate-200 rounded-lg p-4 flex items-start gap-3">
+                    <EyeOff size={16} className="text-slate-600 shrink-0 mt-0.5" />
+                    <div className="text-xs text-slate-700 leading-relaxed">
+                      <p className="font-bold mb-1">Sorok dari pandangan pengguna</p>
+                      {pickedAssets.length} unit akan hilang dari senarai, pilihan tempahan, dan
+                      hasil imbasan QR untuk pengguna biasa. Pentadbir masih boleh nampak
+                      semua dengan penanda <strong>Disorok</strong>. Boleh dipulihkan bila-bila masa.
+                    </div>
+                  </div>
+                )}
+
+                {actionKind === 'show' && (
+                  <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4 flex items-start gap-3">
+                    <Eye size={16} className="text-emerald-600 shrink-0 mt-0.5" />
+                    <div className="text-xs text-emerald-800 leading-relaxed">
+                      <p className="font-bold mb-1">Buka untuk pengguna</p>
+                      {pickedAssets.length} unit akan kembali kelihatan kepada pengguna biasa.
+                      Tindakan <em>lock</em> (jika ada) tidak terjejas — guna butang
+                      "Buka Kunci" untuk itu.
                     </div>
                   </div>
                 )}
