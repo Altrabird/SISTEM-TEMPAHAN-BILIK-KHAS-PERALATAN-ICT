@@ -21,6 +21,7 @@ import {
   updateBookingInCloud,
   bulkReturnLoansInCloud,
   bulkLoanAssetsInCloud,
+  bulkBookRoomsInCloud,
   insertResourceInCloud,
   deleteResourceInCloud,
 } from './lib/storage';
@@ -39,7 +40,7 @@ import { ActiveLoansView } from './views/ActiveLoansView';
 import { MyLoansView } from './views/MyLoansView';
 
 import { OnboardingModal } from './components/OnboardingModal';
-import { BookingModal } from './components/BookingModal';
+import { BookingModal, type BulkBookingInput } from './components/BookingModal';
 import { AssetListModal } from './components/AssetListModal';
 import { AddAssetModal } from './components/AddAssetModal';
 import { EditProfileModal } from './components/EditProfileModal';
@@ -228,6 +229,88 @@ export default function App() {
     };
     setBookings((prev) => [booking, ...prev]);
     void syncBookingToCloud(booking);
+    updateLastActive();
+    return null;
+  };
+
+  /** Submit multiple room bookings in one go (Julat Hari or Pukal mode).
+   *
+   *  Validation strategy: all-or-none. Every candidate slot must clear:
+   *    1. Resource lock check
+   *    2. Conflict check vs *existing* bookings
+   *    3. Conflict check vs *other candidates in this same submission*
+   *  If anything fails we return a human-readable error listing the
+   *  offending slots — nothing is saved. Otherwise we call the new
+   *  `bulk_book_rooms` RPC which does the inserts + emits ONE
+   *  consolidated Telegram digest. */
+  const submitBulkBookings = async (input: BulkBookingInput): Promise<string | null> => {
+    const allRes = [...rooms, ...equipment];
+    const target = allRes.find((r) => r.id === input.resourceId);
+    if (target && isResourceLocked(target)) {
+      return `RALAT: ${target.name} sedang DIKUNCI oleh pentadbir. Sebab: ${lockReasonOf(target)}`;
+    }
+    if (input.slots.length === 0) return 'Tiada slot untuk disimpan.';
+
+    // 1. Conflict check vs existing bookings
+    const existingConflicts: string[] = [];
+    for (const s of input.slots) {
+      const c = bookings.find((b) =>
+        b.resourceId === input.resourceId &&
+        b.date === s.date &&
+        isActiveBooking(b) &&
+        s.startTime < b.endTime &&
+        s.endTime > b.startTime,
+      );
+      if (c) {
+        existingConflicts.push(`${s.date} ${s.startTime}-${s.endTime} (sudah ditempah oleh ${c.userName})`);
+      }
+    }
+    if (existingConflicts.length > 0) {
+      return `RALAT: ${existingConflicts.length} slot bertindih dengan tempahan sedia ada:\n• ${existingConflicts.slice(0, 5).join('\n• ')}${existingConflicts.length > 5 ? `\n• …dan ${existingConflicts.length - 5} lagi` : ''}`;
+    }
+
+    // 2. Conflict check among candidates (e.g. user added two slots on the
+    //    same day with overlapping times)
+    const sorted = [...input.slots].sort((a, b) => (a.date + a.startTime).localeCompare(b.date + b.startTime));
+    for (let i = 1; i < sorted.length; i++) {
+      const prev = sorted[i - 1];
+      const curr = sorted[i];
+      if (prev.date === curr.date && curr.startTime < prev.endTime) {
+        return `RALAT: dua slot bertindih dalam senarai anda pada ${curr.date} (${prev.startTime}-${prev.endTime} dan ${curr.startTime}-${curr.endTime}).`;
+      }
+    }
+
+    // 3. All clear → build booking rows + send to cloud RPC
+    const now = Date.now();
+    const newBookings: Booking[] = input.slots.map((s, i) => ({
+      id: `book-${now}-${i}-${Math.random().toString(36).slice(2, 6)}`,
+      resourceId: input.resourceId,
+      resourceType: input.resourceType,
+      userId: input.userId,
+      userName: input.userName,
+      date: s.date,
+      startTime: s.startTime,
+      endTime: s.endTime,
+      purpose: input.purposeFinal,
+      status: 'confirmed',
+      createdAt: now + i,
+    }));
+
+    // Optimistic local insert FIRST so the UI updates instantly. If the
+    // cloud RPC fails, we roll back the local rows AND surface the error.
+    setBookings((prev) => [...newBookings, ...prev]);
+
+    if (isSupabaseEnabled) {
+      const r = await bulkBookRoomsInCloud(newBookings, input.userId, input.userName, input.purposeFinal);
+      if (!r.ok) {
+        // Roll back optimistic insert
+        const ids = new Set(newBookings.map((b) => b.id));
+        setBookings((prev) => prev.filter((b) => !ids.has(b.id)));
+        return `RALAT: ${r.error ?? 'Gagal simpan ke awan.'}`;
+      }
+    } else {
+      // Local-only mode — already inserted above, nothing more to do
+    }
     updateLastActive();
     return null;
   };
@@ -976,6 +1059,7 @@ export default function App() {
         profile={profile}
         initial={bookingInitial}
         onSubmit={submitBooking}
+        onSubmitMany={submitBulkBookings}
       />
 
       <AssetListModal

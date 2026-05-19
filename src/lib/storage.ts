@@ -362,6 +362,45 @@ export async function bulkReturnLoansInCloud(
 }
 
 /**
+ * Insert many room bookings (range OR ad-hoc bulk slots) in a single
+ * round-trip. The Supabase RPC sets `tempah.suppress_booking_notify`
+ * to silence the per-row Telegram trigger, then emits ONE consolidated
+ * "🚪🚪 Tempahan Bilik Pukal" digest listing every slot.
+ *
+ * All rows must share the same purpose + user. Per-row variables are
+ * `id`, `resource_id`, `date`, `start_time`, `end_time`, `created_at`.
+ */
+export async function bulkBookRoomsInCloud(
+  bookings: Booking[],
+  byUserId: string,
+  byUserName: string,
+  purpose: string,
+): Promise<{ ok: boolean; inserted: number; error?: string }> {
+  if (!isSupabaseEnabled || !supabase) {
+    return { ok: false, inserted: 0, error: 'Supabase belum dikonfig.' };
+  }
+  if (bookings.length === 0) {
+    return { ok: true, inserted: 0 };
+  }
+  const rows = bookings.map((b) => ({
+    id: b.id,
+    resource_id: b.resourceId,
+    date: b.date,
+    start_time: b.startTime,
+    end_time: b.endTime,
+    created_at: new Date(b.createdAt).toISOString(),
+  }));
+  const { data, error } = await supabase.rpc('bulk_book_rooms', {
+    rows,
+    by_user_id: byUserId,
+    by_user_name: byUserName,
+    purpose,
+  });
+  if (error) return { ok: false, inserted: 0, error: error.message };
+  return { ok: true, inserted: typeof data === 'number' ? data : Number(data) || 0 };
+}
+
+/**
  * Insert many ICT loan bookings in a single round-trip. The Supabase RPC
  * suppresses per-row Telegram notifications and emits ONE consolidated
  * digest message instead, so the group chat doesn't get flooded.
