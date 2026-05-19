@@ -79,7 +79,7 @@ src/
 │
 └── components/
     ├── OnboardingModal.tsx     First-run profile picker (Cipta / Pilih / Admin)
-    ├── BookingModal.tsx        Generic booking (rooms primarily)
+    ├── BookingModal.tsx        Generic booking — 3 modes (Satu Hari / Julat Hari / Pukal) for rooms
     ├── LoanModal.tsx           Single-asset ICT loan (purpose + tempoh)
     ├── BulkLoanModal.tsx       Multi-asset ICT loan (2-step picker)
     ├── BulkAssetActionsModal.tsx  Admin: lock/status/delete in bulk
@@ -261,7 +261,7 @@ certbot --nginx -d tempah.altrabird.click
 | LF/CRLF on Windows clone | git noise on every save | `.gitattributes` if it ever bothers |
 | deploy.sh permission denied | Just `bash` it once | `git update-index --chmod=+x` already applied |
 | Tailwind purge missing class | Style absent in build | Use full literal class names, no string interp |
-| Bulk-update spamming Telegram | N triggers fire, N messages | Use RPC + `set_config('tempah.suppress_*_notify','on',true)` |
+| Bulk-update spamming Telegram | N triggers fire, N messages | Use RPC + `set_config('tempah.suppress_*_notify','on',true)`. Three flags exist: `suppress_loan_notify` (bulk_loan_assets), `suppress_return_notify` (bulk_return_loans), `suppress_booking_notify` (bulk_book_rooms). Add another when you build the next bulk-insert RPC |
 | `.upsert()` silently dropping writes | Local state updates, cloud row stays NULL | RLS may have UPDATE but no INSERT. Use `.update().eq('id',...).select()` and treat 0 rows affected as an error |
 | Bookings showing `HH:MM` vs `HH:MM:SS` side by side | Postgres `time` columns come back with seconds | `normalizeTime()` trim in `fetchBookingsFromCloud` |
 | Dashboard / Portfolio etc. showing "N/A" for ICT loans | View searched only rooms + equipment categories; loans store asset id | Use `resolveResourceName()` from `lib/resources.ts` everywhere |
@@ -276,10 +276,13 @@ certbot --nginx -d tempah.altrabird.click
 
 ---
 
-## 10. What's done (v1.8.0)
+## 10. What's done (v1.9.0)
 
 ### Core booking flows
 - ✅ Bilik Khas booking with time-slot conflict detection
+- ✅ **NEW v1.9**: Bilik Khas booking has 3 modes — Satu Hari / Julat
+  Hari (date range, one slot per day) / Pukal (free-form list of
+  per-day slots). All-or-none conflict check, single Telegram digest.
 - ✅ Peralatan ICT loan: single, bulk, QR-driven (date-range)
 - ✅ Conflict check correctly ignores cancelled AND returned bookings
 - ✅ Year-agnostic copy + local-timezone date math everywhere
@@ -335,14 +338,17 @@ certbot --nginx -d tempah.altrabird.click
 - ✅ Dashboard "Tempahan Hari Ini" shows return status pill + summary
   (Pulang TEPAT / AWAL X / LEWAT X hari) for returned loans
 
-### Telegram notifications (7 paths)
+### Telegram notifications (8 paths)
 - ✅ Instant: booking INSERT (rooms + ICT loans)
 - ✅ Instant: return (with early / on-time / late label + notes)
 - ✅ Instant: cancel (with admin attribution + optional reason)
 - ✅ Bulk return: ONE consolidated digest via `bulk_return_loans()` RPC
   (per-row trigger suppressed via session config flag)
-- ✅ **NEW v1.7**: Bulk loan: ONE consolidated digest via
-  `bulk_loan_assets()` RPC (suppress flag `tempah.suppress_loan_notify`)
+- ✅ Bulk loan: ONE consolidated digest via `bulk_loan_assets()` RPC
+  (suppress flag `tempah.suppress_loan_notify`)
+- ✅ **NEW v1.9**: Bulk room booking (Julat Hari / Pukal): ONE
+  consolidated digest via `bulk_book_rooms()` RPC (suppress flag
+  `tempah.suppress_booking_notify`)
 - ✅ Daily 06:30 MY morning digest of today's rooms + multi-day loans
 - ✅ Daily 08:00 MY overdue + due-tomorrow ICT reminder
 
@@ -407,9 +413,14 @@ curl https://tempah.altrabird.click/manifest.webmanifest
 - Telegram bot is `@TempahSKBT_bot` posting to group "Tempah@SKBT"
   (chat_id `-1003958937726`). Token + chat_id stored in Supabase Vault
   as `tg_bot_token` / `tg_chat_id`.
-- For ANY change that mass-updates rows AND has a per-row trigger,
-  always use the suppress-config pattern (see `bulk_return_loans` for
-  reference) — otherwise you spam the Telegram group.
+- For ANY change that mass-inserts or mass-updates rows AND has a
+  per-row trigger, always use the suppress-config pattern — otherwise
+  you spam the Telegram group. Three flags currently exist:
+  `tempah.suppress_loan_notify`, `tempah.suppress_return_notify`,
+  `tempah.suppress_booking_notify`. The pattern: RPC sets the flag
+  with `set_config(..., true)` (session-local), trigger checks the
+  flag and returns early. Reference RPCs: `bulk_loan_assets`,
+  `bulk_return_loans`, `bulk_book_rooms`.
 - Modals MUST have `relative` on the content motion.div — without
   it, the absolute backdrop paints over everything.
 - Dates: never `toISOString().split('T')[0]` — always import from

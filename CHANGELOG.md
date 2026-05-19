@@ -2,7 +2,81 @@
 
 Major milestones for the TEMPAH project.
 
-## v1.8.0 — Admin Lifecycle: Visibility, Create + Delete Categories (current)
+## v1.9.0 — Range + Bulk Room Booking (current)
+
+**The Borang Tempahan form now has three modes. The teacher can book a
+single slot (existing behaviour), a contiguous range of days
+(Julat Hari), or a free-form list of independent slots (Pukal) — all in
+one submission with an all-or-none conflict guarantee and ONE
+consolidated Telegram digest per batch.**
+
+### Three booking modes
+
+The mode selector appears below the resource picker, but only when the
+selected resource is a **room**. Equipment loans go through the
+dedicated LoanModal / BulkLoanModal flows (different semantics: a loan
+is one booking spanning many days; a room booking is one row per slot).
+
+| Mode | UI | Output | Best for |
+|---|---|---|---|
+| **Satu Hari** | Date + Waktu Mula + Waktu Tamat | 1 booking | One-off bookings — unchanged |
+| **Julat Hari** | Dari + Hingga + Waktu Mula + Waktu Tamat | N bookings (one per day, all same time) | Exam week, multi-day workshop |
+| **Pukal** | List of `{date, startTime, endTime}` rows + "Tambah Slot" | N bookings (each independent) | Weekly recurring class, split-week schedule |
+
+Range mode caps at 60 days to prevent year-long fat-finger submissions.
+Range UI shows a live "N hari × 1 slot = N tempahan" preview.
+
+### All-or-none conflict checking
+
+For range + bulk modes, every candidate slot is conflict-checked against:
+1. Existing bookings — would two teachers compete for the same time?
+2. Other candidates in the same submission — did the user accidentally
+   add two overlapping rows?
+
+If anything fails, the **whole batch is rejected** with a listing of
+the offending slots — nothing partial gets saved. The error message
+shows up to 5 conflicts inline + a "…dan N lagi" overflow.
+
+### Telegram doesn't get spammed
+
+A 7-day range booking would have fired 7 individual "🚪 Tempahan Bilik
+Baharu" messages with the old per-row trigger. Now:
+
+- New session-config flag `tempah.suppress_booking_notify` honoured by
+  `notify_booking_telegram()` alongside the existing
+  `suppress_loan_notify` flag from v1.6
+- New RPC `bulk_book_rooms(rows jsonb, by_user_id, by_user_name,
+  purpose)` inserts all rows with the suppress flag set, then emits
+  ONE consolidated **"🚪🚪 Tempahan Bilik Pukal"** digest listing
+  every slot (sorted by date, then start time)
+- Same pattern as `bulk_loan_assets` (v1.7) and `bulk_return_loans`
+  (v1.6) — the suppress-flag convention is now a project standard
+
+### Optimistic UI with rollback
+
+Frontend conflict-check happens BEFORE the cloud round-trip so the
+user gets instant feedback. After validation, the candidate rows are
+inserted into local React state first, then the cloud RPC fires. If
+the RPC fails (e.g. network drop), we roll back the local insert AND
+surface the error — no phantom bookings hanging around.
+
+### Schema additions
+
+- `public.bulk_book_rooms(jsonb, text, text, text)` RPC
+- `tempah.suppress_booking_notify` session-config flag honoured by
+  `notify_booking_telegram()`
+
+### Files added / changed
+
+- `src/components/BookingModal.tsx` — full rewrite, 3-mode tabs +
+  conditional date/time blocks + slot list editor
+- `src/lib/storage.ts` — new `bulkBookRoomsInCloud()` helper
+- `src/App.tsx` — new `submitBulkBookings()` handler wired to
+  `onSubmitMany` prop
+
+---
+
+## v1.8.0 — Admin Lifecycle: Visibility, Create + Delete Categories
 
 **Admin now has full lifecycle control over rooms and equipment categories
 — previously they could only edit pre-seeded rows. New visibility axis
