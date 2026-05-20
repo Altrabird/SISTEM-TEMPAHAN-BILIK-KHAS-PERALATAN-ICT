@@ -89,7 +89,9 @@ declare
   resource_name text;
   category_name text;
   serial_no text;
-  access_note text;
+  has_access_note boolean := false;
+  borrower_email text;
+  access_line text := '';
   msg text;
   icon text;
   heading text;
@@ -111,8 +113,9 @@ begin
   end if;
 
   if is_loan then
-    select a.name, a.serial_number, e.name, a.access_note
-      into resource_name, serial_no, category_name, access_note
+    select a.name, a.serial_number, e.name,
+           (a.access_note is not null and length(trim(a.access_note)) > 0)
+      into resource_name, serial_no, category_name, has_access_note
       from public.assets a
       left join public.equipment e on e.id = a.resource_id
       where a.id = new.resource_id;
@@ -121,6 +124,19 @@ begin
       resource_name := new.resource_id;
     elsif category_name is not null then
       resource_name := resource_name || ' (' || category_name || ')';
+    end if;
+
+    -- v1.9.2: don't reveal access_note in Telegram. Build an indicator line
+    -- that confirms the password was emailed (or warns if email missing).
+    if has_access_note then
+      select email into borrower_email
+        from public.profiles
+        where id = new.user_id;
+      if borrower_email is not null and length(trim(borrower_email)) > 0 then
+        access_line := E'\n🔐 Nota akses dihantar ke email peminjam';
+      else
+        access_line := E'\n⚠️ Unit ada Nota Akses tetapi peminjam tiada email — sila set email di profil';
+      end if;
     end if;
   else
     select name into resource_name from public.rooms where id = new.resource_id;
@@ -143,7 +159,7 @@ begin
     || E'\n' || date_line
     || E'\n👤 <b>' || new.user_name || '</b>'
     || coalesce(E'\n📝 <i>' || new.purpose || '</i>', '')
-    || coalesce(E'\n🔐 <b>Nota Akses:</b> <code>' || access_note || '</code>', '')
+    || access_line
     || E'\n\n🔗 https://tempah.altrabird.click';
 
   perform public.tg_send(msg);
@@ -356,7 +372,10 @@ set search_path = public, extensions
 as $$
 declare
   count_inserted int := 0;
+  count_with_note int := 0;
+  borrower_email text;
   lines text;
+  access_summary text := '';
   msg text;
   total_days int;
   total_label text;
@@ -395,8 +414,8 @@ begin
   total_days := greatest(1, (return_date - start_date));
   total_label := total_days || ' hari × ' || count_inserted || ' unit';
 
-  -- Build the per-unit breakdown using the freshly-inserted rows so we have
-  -- the resolved asset / category names + access notes.
+  -- v1.9.2: don't reveal access_note in Telegram. Mark per-unit if it has
+  -- a note, and roll up the count so admins know how many emails went out.
   with inserted as (
     select b.id, a.name as asset_name, a.serial_number, e.name as cat_name,
            a.access_note
@@ -407,15 +426,26 @@ begin
       and b.created_at = bulk_loan_assets.created_at
   )
   select string_agg(
-    '• <b>' || coalesce(asset_name, 'unit') || '</b>'
-    || coalesce(' <i>(' || cat_name || ')</i>', '')
-    || coalesce(E'\n  <code>' || serial_number || '</code>', '')
-    || coalesce(E'\n  🔐 <code>' || access_note || '</code>', ''),
-    E'\n'
-    order by asset_name
-  )
-  into lines
-  from inserted;
+           '• <b>' || coalesce(asset_name, 'unit') || '</b>'
+           || coalesce(' <i>(' || cat_name || ')</i>', '')
+           || coalesce(E'\n  <code>' || serial_number || '</code>', '')
+           || (case when access_note is not null and length(trim(access_note)) > 0
+                    then E'\n  🔐 ada nota akses' else '' end),
+           E'\n'
+           order by asset_name
+         ),
+         count(*) filter (where access_note is not null and length(trim(access_note)) > 0)
+    into lines, count_with_note
+    from inserted;
+
+  if count_with_note > 0 then
+    select email into borrower_email from public.profiles where id = by_user_id;
+    if borrower_email is not null and length(trim(borrower_email)) > 0 then
+      access_summary := E'\n🔐 ' || count_with_note || ' unit ada nota akses — dihantar ke email peminjam';
+    else
+      access_summary := E'\n⚠️ ' || count_with_note || ' unit ada nota akses tetapi peminjam tiada email — sila set email di profil';
+    end if;
+  end if;
 
   msg := '📦📦 <b>Pinjaman Pukal ICT</b>' || E'\n'
       || '<i>' || count_inserted || ' unit dipinjam oleh ' || by_user_name || '</i>' || E'\n'
@@ -423,6 +453,7 @@ begin
       || ' <i>(' || total_label || ')</i>' || E'\n'
       || coalesce(E'📝 <i>' || purpose || '</i>' || E'\n', '')
       || E'\n' || lines
+      || access_summary
       || E'\n\n🔗 https://tempah.altrabird.click';
 
   perform public.tg_send(msg);

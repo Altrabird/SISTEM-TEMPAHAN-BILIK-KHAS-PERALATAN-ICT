@@ -1,23 +1,33 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, AlertCircle, Laptop, Sparkles, Calendar, ScanLine } from 'lucide-react';
+import {
+  X, AlertCircle, Laptop, Sparkles, Calendar, ScanLine, Mail, KeyRound, UserCog,
+} from 'lucide-react';
 import { Asset, Booking, Profile, Resource } from '../types';
 import { PURPOSE_PRESETS } from '../constants';
 import { todayLocalISO, addDaysLocalISO, daysBetween } from '../lib/dates';
+import { isFirstBorrowOfAsset } from '../lib/loanEmail';
 
 interface Props {
   open: boolean;
   asset: Asset | null;
   category: Resource | null;
   profile: Profile | null;
+  /** Borrower's loan history — used to decide auto-send vs opt-in for password email. */
+  bookings: Booking[];
   /** Was this opened via QR scan (?loan= URL param)? Used for the eyebrow label. */
   fromQr?: boolean;
   onClose: () => void;
+  /** Opens the profile editor so the user can fill in their email. */
+  onEditProfile?: () => void;
   onSubmit: (loan: {
     asset: Asset;
     purpose: string;
     startDate: string;
     returnDate: string;
+    /** True when we should trigger the password email after the loan persists.
+     *  Computed in the modal based on first-borrow status + opt-in toggle. */
+    wantsPasswordEmail: boolean;
   }) => string | null;
 }
 
@@ -33,12 +43,16 @@ const PERIOD_PRESETS: { id: string; label: string; days: number }[] = [
 const todayISO = todayLocalISO;
 const addDaysISO = addDaysLocalISO;
 
-export function LoanModal({ open, asset, category, profile, fromQr, onClose, onSubmit }: Props) {
+export function LoanModal({
+  open, asset, category, profile, bookings, fromQr, onClose, onEditProfile, onSubmit,
+}: Props) {
   const [purposeCategory, setPurposeCategory] = useState('PdPc');
   const [purposeDetail, setPurposeDetail] = useState('');
   const [period, setPeriod] = useState<string>('1d');
   const [customReturn, setCustomReturn] = useState<string>(addDaysISO(todayISO(), 1));
   const [error, setError] = useState<string | null>(null);
+  /** Opt-in toggle for repeat borrowers — default OFF to avoid inbox spam. */
+  const [resendPasswordEmail, setResendPasswordEmail] = useState(false);
 
   useEffect(() => {
     if (open) {
@@ -47,8 +61,20 @@ export function LoanModal({ open, asset, category, profile, fromQr, onClose, onS
       setPeriod('1d');
       setCustomReturn(addDaysISO(todayISO(), 1));
       setError(null);
+      setResendPasswordEmail(false);
     }
   }, [open]);
+
+  // Password-email decision logic. We only enter the gating flow when the
+  // asset has a Nota Akses set; otherwise everything else is unchanged.
+  const hasAccessNote = Boolean(asset?.accessNote && asset.accessNote.trim().length > 0);
+  const borrowerEmail = profile?.email?.trim() ?? '';
+  const isFirstTime = useMemo(() => {
+    if (!asset || !profile) return false;
+    return isFirstBorrowOfAsset(profile.id, asset.id, bookings);
+  }, [asset, profile, bookings]);
+  const wantsPasswordEmail = hasAccessNote && (isFirstTime || resendPasswordEmail);
+  const blockedNoEmail = hasAccessNote && borrowerEmail.length === 0;
 
   const startDate = todayISO();
   const returnDate = useMemo(() => {
@@ -72,11 +98,21 @@ export function LoanModal({ open, asset, category, profile, fromQr, onClose, onS
       setError('Tarikh kembali tak boleh lebih awal daripada tarikh pinjam.');
       return;
     }
+    if (blockedNoEmail) {
+      setError('Unit ini memerlukan email untuk hantar nota akses. Sila set email di profil anda dulu.');
+      return;
+    }
     const finalPurpose = purposeCategory === 'Lain-lain'
       ? purposeDetail
       : (purposeDetail ? `${purposeCategory}: ${purposeDetail}` : purposeCategory);
 
-    const err = onSubmit({ asset, purpose: finalPurpose, startDate, returnDate });
+    const err = onSubmit({
+      asset,
+      purpose: finalPurpose,
+      startDate,
+      returnDate,
+      wantsPasswordEmail,
+    });
     if (err) {
       setError(err);
     } else {
@@ -225,9 +261,76 @@ export function LoanModal({ open, asset, category, profile, fromQr, onClose, onS
                 </div>
               </div>
 
+              {/* Email gating UI — only shows when the unit has a Nota Akses */}
+              {hasAccessNote && (
+                <>
+                  {blockedNoEmail ? (
+                    // Hard block: borrower has no email in profile
+                    <div className="rounded-xl border border-rose-300 bg-rose-50 p-4 space-y-3">
+                      <div className="flex items-start gap-2">
+                        <AlertCircle size={16} className="text-rose-600 shrink-0 mt-0.5" />
+                        <div className="min-w-0">
+                          <p className="text-xs font-bold text-rose-700 uppercase tracking-widest">
+                            Email Diperlukan
+                          </p>
+                          <p className="text-[11px] text-rose-700/90 mt-1 leading-relaxed">
+                            Unit ini ada <strong>Nota Akses</strong> (kata laluan / PIN) yang akan
+                            dihantar ke email anda untuk keselamatan — bukan ditunjuk di app atau
+                            Telegram. Sila set email di profil anda dahulu.
+                          </p>
+                        </div>
+                      </div>
+                      {onEditProfile && (
+                        <button
+                          type="button"
+                          onClick={onEditProfile}
+                          className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-xs font-bold uppercase tracking-widest text-white bg-rose-600 hover:bg-rose-700 transition-all shadow-md shadow-rose-500/30 active:scale-[0.98]"
+                        >
+                          <UserCog size={13} /> Set Email Saya
+                        </button>
+                      )}
+                    </div>
+                  ) : isFirstTime ? (
+                    // Auto-send banner (no toggle)
+                    <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 flex items-start gap-2">
+                      <Mail size={14} className="text-emerald-600 shrink-0 mt-0.5" />
+                      <div className="min-w-0 text-[11px] text-emerald-800 leading-relaxed">
+                        <strong>Nota Akses</strong> (kata laluan / PIN) untuk unit ini akan
+                        dihantar ke email <span className="font-mono">{borrowerEmail}</span>{' '}
+                        secara automatik selepas pinjaman direkod.
+                      </div>
+                    </div>
+                  ) : (
+                    // Repeat borrow: opt-in toggle
+                    <label className="rounded-xl border border-amber-200 bg-amber-50 p-3 flex items-start gap-3 cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={resendPasswordEmail}
+                        onChange={(e) => setResendPasswordEmail(e.target.checked)}
+                        className="mt-0.5 w-4 h-4 rounded border-amber-400 text-amber-600 focus:ring-2 focus:ring-amber-500/30 shrink-0 cursor-pointer"
+                      />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-1.5">
+                          <KeyRound size={12} className="text-amber-700" />
+                          <p className="text-[11px] font-bold text-amber-800 uppercase tracking-wider">
+                            Hantar Nota Akses ke Email Saya
+                          </p>
+                        </div>
+                        <p className="text-[10px] text-amber-700/90 mt-1 leading-relaxed">
+                          Anda sudah pernah pinjam unit ini sebelum ini — nota akses tidak akan dihantar
+                          secara automatik. Tanda jika anda perlukan email rujukan (akan dihantar ke{' '}
+                          <span className="font-mono">{borrowerEmail}</span>).
+                        </p>
+                      </div>
+                    </label>
+                  )}
+                </>
+              )}
+
               <button
                 type="submit"
-                className="w-full bg-gradient-to-r from-purple-600 to-pink-600 text-white py-3.5 rounded-lg text-sm font-bold uppercase tracking-widest hover:from-purple-700 hover:to-pink-700 transition-all shadow-lg shadow-purple-500/25 active:scale-[0.98] flex items-center justify-center gap-2"
+                disabled={blockedNoEmail}
+                className="w-full bg-gradient-to-r from-purple-600 to-pink-600 text-white py-3.5 rounded-lg text-sm font-bold uppercase tracking-widest hover:from-purple-700 hover:to-pink-700 transition-all shadow-lg shadow-purple-500/25 active:scale-[0.98] flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed disabled:from-slate-400 disabled:to-slate-500"
               >
                 <Sparkles size={14} /> Pinjam Sekarang
               </button>

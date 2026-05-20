@@ -105,7 +105,10 @@ deploy/
 
 supabase/
 ├── schema.sql                 Idempotent — re-runnable
-└── notify_setup.sql           Telegram trigger + cron + Vault setup
+├── notify_setup.sql           Telegram trigger + cron + Vault setup
+└── functions/
+    └── send-password-email/   v1.9.2 — Gmail SMTP for Nota Akses delivery
+        └── index.ts           Deno + denomailer; reads GMAIL_USER + GMAIL_APP_PASSWORD env
 
 public/
 ├── favicon.ico                Generated — regenerate via `npm run icons`
@@ -273,10 +276,13 @@ certbot --nginx -d tempah.altrabird.click
 | Hidden rooms / assets still appearing in pickers | View received the unfiltered `rooms` / `equipment` / `assets` instead of the visible-filtered versions | Pass `visibleRooms` / `visibleEquipment` / `visibleAssets` from App.tsx to every non-admin path (BookingModal, BulkLoanModal, AssetListModal, ResourceManagementView). Admin paths get the unfiltered list |
 | Deleting an equipment category fails with FK error | Postgres won't drop a row that `assets.resource_id` still references | Cascade-delete child assets first, THEN the category. See `deleteResource` in App.tsx |
 | Phantom card vanishes after refresh on cloud-insert failure | Optimistic local insert succeeded but cloud RLS rejected | `addResource` rolls back local state on failure + alerts the admin. Required `insert rooms` / `insert equipment` policies in place |
+| Posting passwords / PINs to Telegram | All admins + bots see secrets in group chat history | v1.9.2 routes `access_note` to borrower's profile email via `send-password-email` Edge Function; Telegram only shows `🔐 Nota akses dihantar ke email peminjam` indicator |
+| Edge Function "Loan not found" right after auto-call | Edge fn read the new row before the cloud insert settled | App.tsx adds 600–800ms delay before invoking `sendLoanPasswordEmail()` — the optimistic local state is already correct, the delay is just for the cloud round-trip |
+| `pg_net` can't do SMTP | We need to deliver email but pg_net is HTTP-only | Use a Supabase Edge Function (Deno + `denomailer`) — kept it self-contained, no infra touched on VPS |
 
 ---
 
-## 10. What's done (v1.9.1)
+## 10. What's done (v1.9.2)
 
 ### Core booking flows
 - ✅ Bilik Khas booking with time-slot conflict detection
@@ -295,7 +301,7 @@ certbot --nginx -d tempah.altrabird.click
 - ✅ **NEW v1.8**: Create new Bilik Khas + new Peralatan ICT category from the admin UI (was previously seed-only)
 - ✅ **NEW v1.8**: Delete category from EditResourceModal "Zon Bahaya" with cascade-aware confirms (child assets get cleaned up automatically)
 - ✅ Per-asset QR sticker + bulk sticker sheet (A4, 18-up)
-- ✅ **NEW v1.9.1**: Per-asset **Nota Akses** (laptop password / PIN / login info) — admin edits once on the asset, surfaces automatically on the borrower's loan card (with one-tap Salin) and in the new-loan Telegram message
+- ✅ **NEW v1.9.1 → revised v1.9.2**: Per-asset **Nota Akses** (laptop password / PIN / login info) — admin edits once on the asset. **v1.9.2 security pivot**: nota tidak lagi dimuncul di Telegram atau in-app; dihantar terus ke email peribadi peminjam via Gmail SMTP (Supabase Edge Function `send-password-email`). First-borrow auto-send, repeat-borrow opt-in toggle, missing-email hard block
 
 ### Profiles + portfolio
 - ✅ Profile + portfolio (avatar upload, achievements, streak, charts)
@@ -350,9 +356,11 @@ certbot --nginx -d tempah.altrabird.click
 - ✅ **NEW v1.9**: Bulk room booking (Julat Hari / Pukal): ONE
   consolidated digest via `bulk_book_rooms()` RPC (suppress flag
   `tempah.suppress_booking_notify`)
-- ✅ **NEW v1.9.1**: New-loan messages (single + bulk) auto-include
-  the asset's `🔐 Nota Akses` line when set, so the peminjam gets the
-  laptop password the moment the booking is approved
+- ✅ **REVISED v1.9.2**: New-loan messages (single + bulk) now show
+  `🔐 Nota akses dihantar ke email peminjam` indicator (or ⚠️ when the
+  borrower has no email) — the actual password is no longer revealed in
+  Telegram. Delivery is via Gmail SMTP through the
+  `send-password-email` Edge Function (separate channel)
 - ✅ Daily 06:30 MY morning digest of today's rooms + multi-day loans
 - ✅ Daily 08:00 MY overdue + due-tomorrow ICT reminder
 
@@ -417,6 +425,14 @@ curl https://tempah.altrabird.click/manifest.webmanifest
 - Telegram bot is `@TempahSKBT_bot` posting to group "Tempah@SKBT"
   (chat_id `-1003958937726`). Token + chat_id stored in Supabase Vault
   as `tg_bot_token` / `tg_chat_id`.
+- Per-asset **Nota Akses** (laptop passwords etc., column `assets.access_note`)
+  is delivered ONLY via the `send-password-email` Edge Function to
+  the borrower's profile email — never via Telegram, never inline
+  in any view. Required env secrets on the function:
+  `GMAIL_USER` + `GMAIL_APP_PASSWORD` (set via Supabase Dashboard →
+  Edge Functions → Manage secrets). If you ever surface this column
+  to a user-facing screen again, you're re-introducing the leak that
+  v1.9.2 closed.
 - For ANY change that mass-inserts or mass-updates rows AND has a
   per-row trigger, always use the suppress-config pattern — otherwise
   you spam the Telegram group. Three flags currently exist:

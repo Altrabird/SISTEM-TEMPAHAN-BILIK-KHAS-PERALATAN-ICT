@@ -24,6 +24,7 @@ import {
   bulkBookRoomsInCloud,
   insertResourceInCloud,
   deleteResourceInCloud,
+  sendLoanPasswordEmail,
 } from './lib/storage';
 import { isAssetLocked, isResourceLocked, lockReasonOf } from './lib/locks';
 import { visibleFor } from './lib/visibility';
@@ -320,6 +321,7 @@ export default function App() {
     purpose: string;
     startDate: string;
     returnDate: string;
+    wantsPasswordEmail?: boolean;
   }): string | null => {
     if (!profile) return 'Sila log masuk profil terlebih dahulu.';
     // Lock checks
@@ -350,6 +352,20 @@ export default function App() {
     };
     setBookings((prev) => [booking, ...prev]);
     void syncBookingToCloud(booking);
+    // Fire-and-forget the password email if the asset has a Nota Akses
+    // AND (a) first time borrowing this unit OR (b) borrower opted into resend.
+    // The modal already computed that decision and passed wantsPasswordEmail.
+    if (input.wantsPasswordEmail && isSupabaseEnabled) {
+      void (async () => {
+        // Small delay so the cloud insert finishes before the edge function
+        // tries to read the loan row server-side.
+        await new Promise((r) => setTimeout(r, 600));
+        const res = await sendLoanPasswordEmail(booking.id, 'auto');
+        if (!res.ok) {
+          console.warn('[loan-email] auto-send failed:', res.error, res.code);
+        }
+      })();
+    }
     updateLastActive();
     return null;
   };
@@ -359,6 +375,7 @@ export default function App() {
     purpose: string;
     startDate: string;
     returnDate: string;
+    emailAssetIds?: string[];
   }): string | null => {
     if (!profile) return 'Sila log masuk profil terlebih dahulu.';
     // Lock checks first (asset OR its category)
@@ -409,6 +426,25 @@ export default function App() {
       void bulkLoanAssetsInCloud(newBookings, profile.id, profile.name);
     } else {
       newBookings.forEach((b) => void syncBookingToCloud(b));
+    }
+    // Trigger password emails per-asset for the subset the modal picked
+    // (first-time borrows + any repeat borrows where the user opted in).
+    const emailIds = new Set(input.emailAssetIds ?? []);
+    if (emailIds.size > 0 && isSupabaseEnabled) {
+      // Map asset id → freshly-inserted booking id.
+      const bookingByAsset = new Map(newBookings.map((b) => [b.resourceId, b.id]));
+      void (async () => {
+        // Give the bulk RPC a beat to land before edge fn looks rows up.
+        await new Promise((r) => setTimeout(r, 800));
+        for (const assetId of emailIds) {
+          const loanId = bookingByAsset.get(assetId);
+          if (!loanId) continue;
+          const res = await sendLoanPasswordEmail(loanId, 'auto');
+          if (!res.ok) {
+            console.warn('[loan-email] bulk auto-send failed for', assetId, res.error);
+          }
+        }
+      })();
     }
     updateLastActive();
     return null;
@@ -1120,11 +1156,13 @@ export default function App() {
         asset={loanAsset}
         category={loanAsset ? equipment.find((e) => e.id === loanAsset.resourceId) ?? null : null}
         profile={profile}
+        bookings={bookings}
         fromQr={loanFromQr}
         onClose={() => {
           setLoanAsset(null);
           setLoanFromQr(false);
         }}
+        onEditProfile={() => setShowEditProfileModal(true)}
         onSubmit={submitLoan}
       />
 
@@ -1133,7 +1171,9 @@ export default function App() {
         assets={visibleAssets}
         equipment={visibleEquipment}
         profile={profile}
+        bookings={bookings}
         onClose={() => setShowBulkLoanModal(false)}
+        onEditProfile={() => setShowEditProfileModal(true)}
         onSubmit={submitBulkLoan}
       />
 

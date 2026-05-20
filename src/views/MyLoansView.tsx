@@ -3,10 +3,11 @@ import { motion } from 'motion/react';
 import {
   PackageCheck, Calendar, Clock, AlertTriangle, Search,
   Laptop, ArrowRight, Filter, Sparkles, CheckSquare, Square,
-  KeyRound, Copy, Check,
+  Mail, Loader2, Check, AlertCircle,
 } from 'lucide-react';
 import { Asset, Booking, Profile, Resource } from '../types';
 import { todayLocalISO, daysBetween } from '../lib/dates';
+import { sendLoanPasswordEmail } from '../lib/storage';
 
 interface Props {
   profile: Profile | null;
@@ -353,7 +354,10 @@ export function MyLoansView({ profile, bookings, assets, equipment, onReturn, on
                       <p className="text-[11px] text-slate-500 mt-1.5 line-clamp-2">{b.purpose}</p>
 
                       {!isReturned && asset?.accessNote && (
-                        <AccessNoteBlock note={asset.accessNote} />
+                        <ResendPasswordEmailButton
+                          loanId={b.id}
+                          hasEmail={Boolean(profile?.email && profile.email.trim().length > 0)}
+                        />
                       )}
 
                       {isReturned && b.returnedAt && (
@@ -396,46 +400,85 @@ export function MyLoansView({ profile, bookings, assets, equipment, onReturn, on
 }
 
 /**
- * Renders the admin-seeded access note (password / PIN / credentials)
- * for an active loan. One-tap "Salin" copies the note to clipboard so the
- * borrower can paste it straight into the device login.
+ * Resend the asset's Nota Akses (laptop password / PIN) to the borrower's
+ * profile email. v1.9.2 removed the inline password display — credentials
+ * now travel via email only, so the borrower needs a way to re-trigger
+ * the delivery if they lost the original email.
+ *
+ * Disabled when the user has no email in their profile (the Edge Function
+ * would reject anyway; we surface a friendlier inline message instead).
  */
-function AccessNoteBlock({ note }: { note: string }) {
-  const [copied, setCopied] = useState(false);
+function ResendPasswordEmailButton({
+  loanId,
+  hasEmail,
+}: {
+  loanId: string;
+  hasEmail: boolean;
+}) {
+  const [state, setState] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle');
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  const handleCopy = async () => {
-    try {
-      await navigator.clipboard.writeText(note);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
-    } catch {
-      // Clipboard API can fail on insecure contexts — fall back to selectable text only
+  if (!hasEmail) {
+    return (
+      <div className="mt-2 rounded-lg border border-amber-200 bg-amber-50 p-2.5 flex items-start gap-2">
+        <AlertCircle size={12} className="text-amber-700 mt-0.5 shrink-0" />
+        <p className="text-[11px] text-amber-800 leading-snug">
+          Unit ini ada <strong>nota akses</strong> (kata laluan) — sila set email anda di profil
+          untuk terima rujukan.
+        </p>
+      </div>
+    );
+  }
+
+  const handleResend = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (state === 'sending') return;
+    setState('sending');
+    setErrorMsg(null);
+    const res = await sendLoanPasswordEmail(loanId, 'resend');
+    if (res.ok) {
+      setState('sent');
+      setTimeout(() => setState('idle'), 3000);
+    } else {
+      setState('error');
+      setErrorMsg(res.error ?? 'Gagal hantar');
+      setTimeout(() => setState('idle'), 4000);
     }
   };
 
   return (
-    <div className="mt-2 rounded-lg border border-amber-200 bg-amber-50 p-2.5 flex items-start gap-2">
-      <KeyRound size={12} className="text-amber-700 mt-0.5 shrink-0" />
+    <div className="mt-2 rounded-lg border border-blue-200 bg-blue-50 p-2.5 flex items-start gap-2">
+      <Mail size={12} className="text-blue-700 mt-0.5 shrink-0" />
       <div className="min-w-0 flex-1">
-        <p className="text-[9px] font-bold uppercase tracking-widest text-amber-700">
+        <p className="text-[10px] font-bold uppercase tracking-widest text-blue-700">
           Nota Akses
         </p>
-        <p className="text-[12px] font-mono text-slate-800 leading-snug whitespace-pre-wrap break-words select-text mt-0.5">
-          {note}
+        <p className="text-[11px] text-blue-800/90 leading-snug mt-0.5">
+          Dihantar ke email anda. Kalau hilang, klik untuk hantar semula.
         </p>
+        {state === 'error' && errorMsg && (
+          <p className="text-[10px] text-rose-700 mt-1">⚠️ {errorMsg}</p>
+        )}
       </div>
       <button
         type="button"
-        onClick={(e) => { e.stopPropagation(); void handleCopy(); }}
-        className={`shrink-0 p-1.5 rounded-md text-[10px] font-bold uppercase tracking-widest transition-all flex items-center gap-1 ${
-          copied
+        onClick={handleResend}
+        disabled={state === 'sending'}
+        className={`shrink-0 px-2.5 py-1.5 rounded-md text-[10px] font-bold uppercase tracking-widest transition-all flex items-center gap-1 ${
+          state === 'sent'
             ? 'bg-emerald-100 text-emerald-700'
-            : 'bg-white border border-amber-300 text-amber-700 hover:bg-amber-100'
+            : state === 'sending'
+            ? 'bg-slate-200 text-slate-500 cursor-wait'
+            : 'bg-white border border-blue-300 text-blue-700 hover:bg-blue-100'
         }`}
-        title="Salin nota akses"
       >
-        {copied ? <Check size={11} /> : <Copy size={11} />}
-        {copied ? 'Salin!' : 'Salin'}
+        {state === 'sending' ? (
+          <><Loader2 size={11} className="animate-spin" /> Hantar</>
+        ) : state === 'sent' ? (
+          <><Check size={11} /> Terhantar!</>
+        ) : (
+          <><Mail size={11} /> Hantar Semula</>
+        )}
       </button>
     </div>
   );

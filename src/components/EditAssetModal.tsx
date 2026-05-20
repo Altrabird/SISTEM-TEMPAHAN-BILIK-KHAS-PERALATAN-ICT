@@ -257,7 +257,8 @@ export function EditAssetModal({ open, asset, equipment, onClose, onSave, onDele
                     </label>
                     <p className="text-[10px] text-amber-700/80 leading-snug mt-0.5">
                       Contoh: <span className="font-mono">User: pelajar · Pass: skbt2026</span>. Admin sahaja yang nampak
-                      di sini; akan dihantar via Telegram + dipapar pada kad pinjaman peminjam aktif.
+                      di sini. Bila peminjam pinjam unit ini, nota dihantar terus ke <strong>email peribadi</strong> peminjam
+                      (tidak ditunjuk di Telegram atau in-app untuk keselamatan).
                     </p>
                   </div>
                 </div>

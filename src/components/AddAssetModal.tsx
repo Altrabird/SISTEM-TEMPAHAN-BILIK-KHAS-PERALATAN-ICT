@@ -163,8 +163,9 @@ export function AddAssetModal({ open, initialResourceId, equipment, onClose, onS
                       Nota Akses (pilihan)
                     </label>
                     <p className="text-[10px] text-amber-700/80 leading-snug mt-0.5">
-                      Contoh: <span className="font-mono">User: pelajar · Pass: skbt2026</span>. Hanya admin yang boleh edit,
-                      dan akan dihantar via Telegram + dipaparkan kepada peminjam aktif sahaja.
+                      Contoh: <span className="font-mono">User: pelajar · Pass: skbt2026</span>. Admin sahaja yang boleh edit.
+                      Bila unit ini dipinjam, nota dihantar terus ke <strong>email peribadi</strong> peminjam
+                      (tidak ditunjuk di Telegram atau in-app untuk keselamatan).
                     </p>
                   </div>
                 </div>

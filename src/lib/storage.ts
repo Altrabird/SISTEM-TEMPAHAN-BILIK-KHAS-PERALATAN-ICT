@@ -439,6 +439,55 @@ export async function bulkLoanAssetsInCloud(
   return { ok: true, inserted: typeof data === 'number' ? data : Number(data) || 0 };
 }
 
+/**
+ * Invoke the `send-password-email` Edge Function to deliver an asset's
+ * Nota Akses to the borrower's profile email via Gmail SMTP.
+ *
+ * The function looks up the loan + asset + borrower email server-side
+ * (service-role) so the frontend never needs to hold the access_note in
+ * memory — it just hands over the loan id. The Edge Function:
+ *   - Rejects with `code: 'no_email'` if the borrower's profile email is empty
+ *   - Rejects if the asset has no access_note set
+ *   - Sends a polished HTML email + plain-text fallback via Gmail SMTP (port 465 TLS)
+ *
+ * `mode: 'auto'` = post-insert first-time auto-send.
+ * `mode: 'resend'` = user clicked "Hantar Semula ke Email" on their loan card.
+ */
+export async function sendLoanPasswordEmail(
+  loanId: string,
+  mode: 'auto' | 'resend' = 'auto',
+): Promise<{ ok: boolean; error?: string; code?: string; sentTo?: string }> {
+  if (!isSupabaseEnabled || !supabase) {
+    return { ok: false, error: 'Supabase belum dikonfig.' };
+  }
+  try {
+    const { data, error } = await supabase.functions.invoke('send-password-email', {
+      body: { loanId, mode },
+    });
+    if (error) {
+      // FunctionsHttpError → parse the JSON body for our app-level error message
+      // The error object's message is usually generic ("Edge Function returned a non-2xx
+      // status code"); the real reason is in error.context.response (if available).
+      let parsedError = error.message ?? 'Email send failed';
+      let parsedCode: string | undefined;
+      try {
+        const ctx: any = (error as any).context;
+        if (ctx?.response && typeof ctx.response.json === 'function') {
+          const body = await ctx.response.json();
+          if (body?.error) parsedError = body.error;
+          if (body?.code) parsedCode = body.code;
+        }
+      } catch {
+        // best-effort parsing — fall back to the generic message
+      }
+      return { ok: false, error: parsedError, code: parsedCode };
+    }
+    return { ok: true, sentTo: data?.sentTo };
+  } catch (err: any) {
+    return { ok: false, error: err?.message ?? 'Network error semasa hantar email' };
+  }
+}
+
 /** Update an existing booking row (e.g., return logging, cancellation). */
 export async function updateBookingInCloud(booking: Booking): Promise<{ ok: boolean; error?: string }> {
   if (!isSupabaseEnabled || !supabase) {

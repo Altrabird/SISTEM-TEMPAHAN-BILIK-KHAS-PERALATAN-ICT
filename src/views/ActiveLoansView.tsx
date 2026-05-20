@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { motion } from 'motion/react';
 import {
   PackageCheck, Calendar, Clock, AlertTriangle, Search, RefreshCw,
-  Laptop, Cloud, CloudOff, ArrowRight, Filter, KeyRound,
+  Laptop, Cloud, CloudOff, ArrowRight, Filter, Mail,
 } from 'lucide-react';
 import { Asset, Booking, Resource } from '../types';
 import { fetchBookingsFromCloud, fetchAssetsFromCloud } from '../lib/storage';
@@ -281,10 +281,10 @@ export function ActiveLoansView({ rooms, equipment, localBookings, localAssets, 
                       <p className="text-[11px] text-slate-600 max-w-xs truncate" title={b.purpose}>{b.purpose}</p>
                       {!isReturned && asset?.accessNote && (
                         <p
-                          className="text-[10px] text-amber-700 font-mono mt-0.5 max-w-xs truncate flex items-center gap-1"
-                          title={`Nota akses: ${asset.accessNote}`}
+                          className="text-[10px] text-blue-700 mt-0.5 flex items-center gap-1"
+                          title="Nota akses dihantar ke email peminjam — tidak ditunjuk di sini untuk keselamatan"
                         >
-                          <KeyRound size={10} className="shrink-0" /> {asset.accessNote}
+                          <Mail size={10} className="shrink-0" /> Nota akses → email peminjam
                         </p>
                       )}
                       {b.returnNotes && (

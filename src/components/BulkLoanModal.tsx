@@ -2,24 +2,31 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   X, AlertCircle, Laptop, Sparkles, Calendar, Search, CheckSquare, Square,
-  Package, ArrowRight, ArrowLeft
+  Package, ArrowRight, ArrowLeft, Mail, KeyRound, UserCog,
 } from 'lucide-react';
-import { Asset, Profile, Resource } from '../types';
+import { Asset, Booking, Profile, Resource } from '../types';
 import { PURPOSE_PRESETS } from '../constants';
 import { isAssetLocked, isResourceLocked } from '../lib/locks';
 import { todayLocalISO, addDaysLocalISO, daysBetween } from '../lib/dates';
+import { isFirstBorrowOfAsset } from '../lib/loanEmail';
 
 interface Props {
   open: boolean;
   assets: Asset[];
   equipment: Resource[];
   profile: Profile | null;
+  /** Borrower's loan history — used to split picked assets into first-vs-repeat for email gating. */
+  bookings: Booking[];
   onClose: () => void;
+  /** Opens the profile editor so the user can fill in their email. */
+  onEditProfile?: () => void;
   onSubmit: (loan: {
     assets: Asset[];
     purpose: string;
     startDate: string;
     returnDate: string;
+    /** Per-asset id set — only these should trigger a password email post-insert. */
+    emailAssetIds: string[];
   }) => string | null;
 }
 
@@ -34,7 +41,9 @@ const PERIOD_PRESETS: { id: string; label: string; days: number }[] = [
 const todayISO = todayLocalISO;
 const addDaysISO = addDaysLocalISO;
 
-export function BulkLoanModal({ open, assets, equipment, profile, onClose, onSubmit }: Props) {
+export function BulkLoanModal({
+  open, assets, equipment, profile, bookings, onClose, onEditProfile, onSubmit,
+}: Props) {
   const [step, setStep] = useState<'select' | 'form'>('select');
   const [picked, setPicked] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState('');
@@ -44,6 +53,9 @@ export function BulkLoanModal({ open, assets, equipment, profile, onClose, onSub
   const [customStart, setCustomStart] = useState<string>(todayISO());
   const [customReturn, setCustomReturn] = useState<string>(addDaysISO(todayISO(), 1));
   const [error, setError] = useState<string | null>(null);
+  /** Repeat-borrow opt-in toggle: when ON, also send password email for
+   *  assets the user has already borrowed before in this batch. */
+  const [resendForRepeats, setResendForRepeats] = useState(false);
 
   useEffect(() => {
     if (open) {
@@ -56,6 +68,7 @@ export function BulkLoanModal({ open, assets, equipment, profile, onClose, onSub
       setCustomStart(todayISO());
       setCustomReturn(addDaysISO(todayISO(), 1));
       setError(null);
+      setResendForRepeats(false);
     }
   }, [open]);
 
@@ -126,6 +139,32 @@ export function BulkLoanModal({ open, assets, equipment, profile, onClose, onSub
     [available, picked],
   );
 
+  // Split picked assets into the 3 email-gating buckets:
+  //   - firstTimeWithNote: auto-send (no toggle, no ask)
+  //   - repeatWithNote: opt-in via toggle
+  //   - noNote: skipped entirely (no email gating)
+  const emailBuckets = useMemo(() => {
+    if (!profile) return { firstTime: [] as Asset[], repeat: [] as Asset[], noNote: [] as Asset[] };
+    const firstTime: Asset[] = [];
+    const repeat: Asset[] = [];
+    const noNote: Asset[] = [];
+    pickedAssets.forEach((a) => {
+      const hasNote = Boolean(a.accessNote && a.accessNote.trim().length > 0);
+      if (!hasNote) {
+        noNote.push(a);
+      } else if (isFirstBorrowOfAsset(profile.id, a.id, bookings)) {
+        firstTime.push(a);
+      } else {
+        repeat.push(a);
+      }
+    });
+    return { firstTime, repeat, noNote };
+  }, [pickedAssets, profile, bookings]);
+
+  const borrowerEmail = profile?.email?.trim() ?? '';
+  const needsEmail = emailBuckets.firstTime.length > 0 || (resendForRepeats && emailBuckets.repeat.length > 0);
+  const blockedNoEmail = needsEmail && borrowerEmail.length === 0;
+
   const goToForm = () => {
     if (picked.size === 0) {
       setError('Sila pilih sekurang-kurangnya 1 unit.');
@@ -146,10 +185,24 @@ export function BulkLoanModal({ open, assets, equipment, profile, onClose, onSub
       setError('Tarikh kembali tak boleh lebih awal.');
       return;
     }
+    if (blockedNoEmail) {
+      setError('Sila set email di profil sebelum pinjam unit yang ada Nota Akses.');
+      return;
+    }
     const finalPurpose = purposeCategory === 'Lain-lain'
       ? purposeDetail
       : (purposeDetail ? `${purposeCategory}: ${purposeDetail}` : purposeCategory);
-    const err = onSubmit({ assets: pickedAssets, purpose: finalPurpose, startDate, returnDate });
+    const emailAssetIds = [
+      ...emailBuckets.firstTime.map((a) => a.id),
+      ...(resendForRepeats ? emailBuckets.repeat.map((a) => a.id) : []),
+    ];
+    const err = onSubmit({
+      assets: pickedAssets,
+      purpose: finalPurpose,
+      startDate,
+      returnDate,
+      emailAssetIds,
+    });
     if (err) {
       setError(err);
     } else {
@@ -411,6 +464,71 @@ export function BulkLoanModal({ open, assets, equipment, profile, onClose, onSub
                   </div>
                 </div>
 
+                {/* Email gating — only when at least one picked asset has a Nota Akses */}
+                {(emailBuckets.firstTime.length + emailBuckets.repeat.length) > 0 && (
+                  <div className="space-y-2">
+                    {blockedNoEmail && (
+                      <div className="rounded-xl border border-rose-300 bg-rose-50 p-4 space-y-3">
+                        <div className="flex items-start gap-2">
+                          <AlertCircle size={16} className="text-rose-600 shrink-0 mt-0.5" />
+                          <div className="min-w-0">
+                            <p className="text-xs font-bold text-rose-700 uppercase tracking-widest">
+                              Email Diperlukan
+                            </p>
+                            <p className="text-[11px] text-rose-700/90 mt-1 leading-relaxed">
+                              {emailBuckets.firstTime.length} unit dalam pilihan anda ada{' '}
+                              <strong>Nota Akses</strong> (kata laluan / PIN) yang akan dihantar ke
+                              email anda. Sila set email di profil dahulu.
+                            </p>
+                          </div>
+                        </div>
+                        {onEditProfile && (
+                          <button
+                            type="button"
+                            onClick={onEditProfile}
+                            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-xs font-bold uppercase tracking-widest text-white bg-rose-600 hover:bg-rose-700 transition-all shadow-md shadow-rose-500/30 active:scale-[0.98]"
+                          >
+                            <UserCog size={13} /> Set Email Saya
+                          </button>
+                        )}
+                      </div>
+                    )}
+                    {!blockedNoEmail && emailBuckets.firstTime.length > 0 && (
+                      <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 flex items-start gap-2">
+                        <Mail size={14} className="text-emerald-600 shrink-0 mt-0.5" />
+                        <div className="min-w-0 text-[11px] text-emerald-800 leading-relaxed">
+                          <strong>{emailBuckets.firstTime.length} unit</strong> ada nota akses
+                          baharu — akan dihantar ke email{' '}
+                          <span className="font-mono">{borrowerEmail}</span> secara automatik
+                          selepas pinjaman direkod.
+                        </div>
+                      </div>
+                    )}
+                    {emailBuckets.repeat.length > 0 && (
+                      <label className="rounded-xl border border-amber-200 bg-amber-50 p-3 flex items-start gap-3 cursor-pointer select-none">
+                        <input
+                          type="checkbox"
+                          checked={resendForRepeats}
+                          onChange={(e) => setResendForRepeats(e.target.checked)}
+                          className="mt-0.5 w-4 h-4 rounded border-amber-400 text-amber-600 focus:ring-2 focus:ring-amber-500/30 shrink-0 cursor-pointer"
+                        />
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-1.5">
+                            <KeyRound size={12} className="text-amber-700" />
+                            <p className="text-[11px] font-bold text-amber-800 uppercase tracking-wider">
+                              Hantar Semula ke Email ({emailBuckets.repeat.length} unit)
+                            </p>
+                          </div>
+                          <p className="text-[10px] text-amber-700/90 mt-1 leading-relaxed">
+                            Anda sudah pernah pinjam <strong>{emailBuckets.repeat.length} unit</strong>{' '}
+                            ini sebelum ini. Tanda jika anda perlukan email rujukan semula.
+                          </p>
+                        </div>
+                      </label>
+                    )}
+                  </div>
+                )}
+
                 <div className="flex items-center gap-3 pt-2">
                   <button
                     type="button"
@@ -421,7 +539,8 @@ export function BulkLoanModal({ open, assets, equipment, profile, onClose, onSub
                   </button>
                   <button
                     type="submit"
-                    className="flex-1 bg-gradient-to-r from-purple-600 to-pink-600 text-white py-3 rounded-lg text-sm font-bold uppercase tracking-widest hover:from-purple-700 hover:to-pink-700 transition-all shadow-lg shadow-purple-500/25 active:scale-[0.98] flex items-center justify-center gap-2"
+                    disabled={blockedNoEmail}
+                    className="flex-1 bg-gradient-to-r from-purple-600 to-pink-600 text-white py-3 rounded-lg text-sm font-bold uppercase tracking-widest hover:from-purple-700 hover:to-pink-700 transition-all shadow-lg shadow-purple-500/25 active:scale-[0.98] flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed disabled:from-slate-400 disabled:to-slate-500"
                   >
                     <Sparkles size={14} /> Pinjam {pickedAssets.length} Unit
                   </button>

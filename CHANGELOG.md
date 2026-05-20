@@ -2,7 +2,82 @@
 
 Major milestones for the TEMPAH project.
 
-## v1.9.1 — Nota Akses per-Aset (current)
+## v1.9.2 — Nota Akses ke Email Peminjam (current)
+
+**Pivot keselamatan: kata laluan tidak lagi muncul di Telegram group
+chat atau di mana-mana skrin app. Sebaliknya, Nota Akses dihantar
+terus ke email peribadi peminjam melalui Gmail SMTP, dengan logik
+"first time = auto, repeat = opt-in" supaya inbox tidak di-spam.**
+
+### Mengapa
+
+v1.9.1 letak nota akses di mesej Telegram dan kad pinjaman in-app.
+Telegram group dilihat oleh semua admin + bot — kebocoran password
+yang nyata. Kad in-app pula muncul di senarai pinjaman peminjam yang
+dilihat oleh sesiapa yang pinjam peranti mereka (tab terbuka, dll.).
+Email peribadi adalah saluran 1-ke-1 yang lebih sesuai untuk
+maklumat sulit.
+
+### Aliran baru
+
+| Senario | Tindakan |
+|---|---|
+| Pinjam unit baharu yang ada Nota Akses | Email auto-dihantar (tiada toggle) |
+| Pinjam unit yang sama untuk kali ke-2+ | Toggle opt-in muncul di modal — default OFF |
+| Profil tiada email | Submit di-block; butang "Set Email Saya" buka EditProfileModal |
+| Hilang email asal? | Butang "Hantar Semula" pada kad pinjaman aktif di Pinjaman Saya |
+| Admin / Telegram | Lihat indikator "🔐 Nota akses dihantar ke email peminjam" sahaja — tiada kebocoran |
+
+### Infrastruktur
+
+- **Supabase Edge Function**: `send-password-email` (Deno + `denomailer`)
+  - Server-side lookup dari `loanId` → bookings → assets → profiles
+    (service-role bypass RLS supaya frontend tidak perlu kongsi
+    access_note dalam request body)
+  - SMTP via `smtp.gmail.com:465` TLS implicit
+  - HTML email berformat (gradient header, monospace credentials block,
+    branded footer) + plain-text fallback
+- **Env secrets** (set via Supabase Dashboard → Edge Functions → Manage secrets):
+  - `GMAIL_USER` — e.g. `tempah.skbt@gmail.com`
+  - `GMAIL_APP_PASSWORD` — 16-aksara App Password dari Google
+- **Auto-injected**: `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`
+
+### Perubahan SQL
+
+| Objek | Perubahan |
+|---|---|
+| `public.notify_booking_telegram()` | Buang `🔐 Nota Akses: <code>...</code>` line. Tambah indikator `🔐 Nota akses dihantar ke email peminjam` (atau ⚠️ warning bila peminjam tiada email). |
+| `public.bulk_loan_assets()` | Per-unit line jadi `🔐 ada nota akses` (tanpa nilai). Tambah summary `🔐 N unit ada nota akses — dihantar ke email peminjam`. |
+
+Migration name: `drop_access_note_from_telegram_v1_9_2`. Backward compat:
+lajur `assets.access_note` kekal — hanya jalan keluarnya yang berubah.
+
+### Files baharu/diubah
+
+- `supabase/functions/send-password-email/index.ts` — **NEW** Edge Function
+- `src/lib/loanEmail.ts` — **NEW** `isFirstBorrowOfAsset()` + `shouldAutoSendPassword()` helpers
+- `src/lib/storage.ts` — **NEW** `sendLoanPasswordEmail(loanId, mode)` wrapper untuk `supabase.functions.invoke`
+- `src/components/LoanModal.tsx` — 3-mode email gating: auto-banner (first), opt-in toggle (repeat), hard-block + "Set Email Saya" (no email)
+- `src/components/BulkLoanModal.tsx` — sama logic per-asset; auto-send untuk first-time subset, opt-in checkbox untuk repeat subset
+- `src/views/MyLoansView.tsx` — buang `AccessNoteBlock`, ganti `ResendPasswordEmailButton` (blue card dengan "Hantar Semula")
+- `src/views/ActiveLoansView.tsx` — buang inline nota akses, ganti `🔐 Nota akses → email peminjam` indicator
+- `src/components/AddAssetModal.tsx` & `EditAssetModal.tsx` — helper text dikemaskini supaya admin tahu nota tidak ke Telegram lagi
+- `src/App.tsx` — `submitLoan` + `submitBulkLoan` trigger `sendLoanPasswordEmail` selepas insert berjaya (dengan 600-800ms delay untuk pastikan row landed)
+- `supabase/notify_setup.sql` — reference file mirror SQL deployed
+
+### Setup untuk admin (sekali sahaja)
+
+1. Buat Gmail account khas, cth: `tempah.skbt@gmail.com`
+2. Enable 2FA di Google Account → Security
+3. Generate App Password 16-aksara di [myaccount.google.com/apppasswords](https://myaccount.google.com/apppasswords)
+4. Di Supabase Dashboard → project → Edge Functions → Manage secrets:
+   - `GMAIL_USER` = `tempah.skbt@gmail.com`
+   - `GMAIL_APP_PASSWORD` = `xxxx xxxx xxxx xxxx` (16-aksara, tanpa ruang OK)
+5. Selesai — pinjam aset yang ada nota akses, email auto sampai
+
+---
+
+## v1.9.1 — Nota Akses per-Aset
 
 **Setiap unit ICT kini boleh mempunyai "Nota Akses" admin-only — kata
 laluan laptop, PIN aplikasi, atau apa-apa info akses kongsi. Bila aset
