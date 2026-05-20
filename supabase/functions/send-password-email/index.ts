@@ -12,6 +12,16 @@
  *
  * SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY are auto-injected.
  *
+ * verify_jwt is INTENTIONALLY off:
+ *   This project has no Supabase Auth integration — there are no real JWTs
+ *   to pass. The frontend uses a publishable API key (`sb_publishable_...`)
+ *   which Edge Function's JWT verifier rejects. Security is still solid:
+ *   the function requires a valid `loanId`, looks up every dependent record
+ *   server-side via service_role, and the password ALWAYS goes to the
+ *   borrower's profile email (set by the loan's user_id) — never to a
+ *   caller-supplied address. Worst-case abuse: someone with a guessed
+ *   loanId triggers a re-send to the same borrower's inbox.
+ *
  * Why server-side lookup (not pass note in payload):
  *   The frontend should NEVER hold an arbitrary asset's access_note in a
  *   request body that could be replayed against any loan id. By looking
