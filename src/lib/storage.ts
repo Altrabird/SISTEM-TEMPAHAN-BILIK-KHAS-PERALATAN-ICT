@@ -150,6 +150,7 @@ function rowToAsset(row: any): Asset {
     status: row.status ?? 'available',
     lockedReason: row.locked_reason ?? undefined,
     hidden: row.hidden ?? false,
+    accessNote: row.access_note ?? undefined,
   };
 }
 
@@ -276,6 +277,7 @@ export async function upsertAssetToCloud(asset: Asset): Promise<{ ok: boolean; e
     status: asset.status,
     locked_reason: asset.lockedReason ?? null,
     hidden: asset.hidden ?? false,
+    access_note: asset.accessNote ?? null,
   });
   if (error) return { ok: false, error: error.message };
   return { ok: true };

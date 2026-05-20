@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
-  X, Image as ImageIcon, Camera, Trash2, Loader2, AlertCircle, Laptop
+  X, Image as ImageIcon, Camera, Trash2, Loader2, AlertCircle, Laptop, KeyRound
 } from 'lucide-react';
 import { Asset, Resource } from '../types';
 import { uploadAssetImage } from '../lib/storage';
@@ -25,6 +25,7 @@ export function AddAssetModal({ open, initialResourceId, equipment, onClose, onS
     specifications: '',
     imageUrl: '',
     status: 'available',
+    accessNote: '',
   });
 
   const [uploading, setUploading] = useState(false);
@@ -41,6 +42,7 @@ export function AddAssetModal({ open, initialResourceId, equipment, onClose, onS
         specifications: '',
         imageUrl: '',
         status: 'available',
+        accessNote: '',
         resourceId: initialResourceId ?? '',
       });
       setUploadError(null);
@@ -73,6 +75,7 @@ export function AddAssetModal({ open, initialResourceId, equipment, onClose, onS
     onSubmit({
       ...(draft as Asset),
       id: draftId,
+      accessNote: draft.accessNote?.trim() ? draft.accessNote.trim() : undefined,
     });
     onClose();
   };
@@ -151,6 +154,28 @@ export function AddAssetModal({ open, initialResourceId, equipment, onClose, onS
                   className="aa-input resize-none"
                 />
               </Field>
+
+              <div className="rounded-xl border border-amber-200 bg-amber-50/60 p-3 space-y-2">
+                <div className="flex items-start gap-2">
+                  <KeyRound size={13} className="text-amber-600 mt-0.5 shrink-0" />
+                  <div className="min-w-0 flex-1">
+                    <label className="text-[10px] font-bold uppercase tracking-widest text-amber-700">
+                      Nota Akses (pilihan)
+                    </label>
+                    <p className="text-[10px] text-amber-700/80 leading-snug mt-0.5">
+                      Contoh: <span className="font-mono">User: pelajar · Pass: skbt2026</span>. Hanya admin yang boleh edit,
+                      dan akan dihantar via Telegram + dipaparkan kepada peminjam aktif sahaja.
+                    </p>
+                  </div>
+                </div>
+                <textarea
+                  rows={2}
+                  placeholder="Username / password / PIN untuk laptop ini..."
+                  value={draft.accessNote ?? ''}
+                  onChange={(e) => setDraft({ ...draft, accessNote: e.target.value })}
+                  className="w-full px-3 py-2 rounded-lg border border-amber-300 text-sm font-mono bg-white focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none transition-all resize-none"
+                />
+              </div>
 
               <Field label="Gambar Item (pilihan)">
                 <input

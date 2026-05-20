@@ -3,6 +3,7 @@ import { motion } from 'motion/react';
 import {
   PackageCheck, Calendar, Clock, AlertTriangle, Search,
   Laptop, ArrowRight, Filter, Sparkles, CheckSquare, Square,
+  KeyRound, Copy, Check,
 } from 'lucide-react';
 import { Asset, Booking, Profile, Resource } from '../types';
 import { todayLocalISO, daysBetween } from '../lib/dates';
@@ -351,6 +352,10 @@ export function MyLoansView({ profile, bookings, assets, equipment, onReturn, on
 
                       <p className="text-[11px] text-slate-500 mt-1.5 line-clamp-2">{b.purpose}</p>
 
+                      {!isReturned && asset?.accessNote && (
+                        <AccessNoteBlock note={asset.accessNote} />
+                      )}
+
                       {isReturned && b.returnedAt && (
                         <p className="text-[10px] text-emerald-700 mt-1.5">
                           <PackageCheck size={10} className="inline mr-0.5" />
@@ -386,6 +391,52 @@ export function MyLoansView({ profile, bookings, assets, equipment, onReturn, on
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * Renders the admin-seeded access note (password / PIN / credentials)
+ * for an active loan. One-tap "Salin" copies the note to clipboard so the
+ * borrower can paste it straight into the device login.
+ */
+function AccessNoteBlock({ note }: { note: string }) {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(note);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      // Clipboard API can fail on insecure contexts — fall back to selectable text only
+    }
+  };
+
+  return (
+    <div className="mt-2 rounded-lg border border-amber-200 bg-amber-50 p-2.5 flex items-start gap-2">
+      <KeyRound size={12} className="text-amber-700 mt-0.5 shrink-0" />
+      <div className="min-w-0 flex-1">
+        <p className="text-[9px] font-bold uppercase tracking-widest text-amber-700">
+          Nota Akses
+        </p>
+        <p className="text-[12px] font-mono text-slate-800 leading-snug whitespace-pre-wrap break-words select-text mt-0.5">
+          {note}
+        </p>
+      </div>
+      <button
+        type="button"
+        onClick={(e) => { e.stopPropagation(); void handleCopy(); }}
+        className={`shrink-0 p-1.5 rounded-md text-[10px] font-bold uppercase tracking-widest transition-all flex items-center gap-1 ${
+          copied
+            ? 'bg-emerald-100 text-emerald-700'
+            : 'bg-white border border-amber-300 text-amber-700 hover:bg-amber-100'
+        }`}
+        title="Salin nota akses"
+      >
+        {copied ? <Check size={11} /> : <Copy size={11} />}
+        {copied ? 'Salin!' : 'Salin'}
+      </button>
     </div>
   );
 }

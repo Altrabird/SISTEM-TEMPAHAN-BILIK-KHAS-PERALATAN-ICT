@@ -89,6 +89,7 @@ declare
   resource_name text;
   category_name text;
   serial_no text;
+  access_note text;
   msg text;
   icon text;
   heading text;
@@ -103,9 +104,15 @@ begin
     return new;
   end if;
 
+  -- Bulk-book-rooms suppression flag (rooms-only digest)
+  suppress := current_setting('tempah.suppress_booking_notify', true);
+  if suppress = 'on' then
+    return new;
+  end if;
+
   if is_loan then
-    select a.name, a.serial_number, e.name
-      into resource_name, serial_no, category_name
+    select a.name, a.serial_number, e.name, a.access_note
+      into resource_name, serial_no, category_name, access_note
       from public.assets a
       left join public.equipment e on e.id = a.resource_id
       where a.id = new.resource_id;
@@ -136,6 +143,7 @@ begin
     || E'\n' || date_line
     || E'\n👤 <b>' || new.user_name || '</b>'
     || coalesce(E'\n📝 <i>' || new.purpose || '</i>', '')
+    || coalesce(E'\n🔐 <b>Nota Akses:</b> <code>' || access_note || '</code>', '')
     || E'\n\n🔗 https://tempah.altrabird.click';
 
   perform public.tg_send(msg);
@@ -388,9 +396,10 @@ begin
   total_label := total_days || ' hari × ' || count_inserted || ' unit';
 
   -- Build the per-unit breakdown using the freshly-inserted rows so we have
-  -- the resolved asset / category names.
+  -- the resolved asset / category names + access notes.
   with inserted as (
-    select b.id, a.name as asset_name, a.serial_number, e.name as cat_name
+    select b.id, a.name as asset_name, a.serial_number, e.name as cat_name,
+           a.access_note
     from public.bookings b
     left join public.assets a on a.id = b.resource_id
     left join public.equipment e on e.id = a.resource_id
@@ -400,7 +409,8 @@ begin
   select string_agg(
     '• <b>' || coalesce(asset_name, 'unit') || '</b>'
     || coalesce(' <i>(' || cat_name || ')</i>', '')
-    || coalesce(E'\n  <code>' || serial_number || '</code>', ''),
+    || coalesce(E'\n  <code>' || serial_number || '</code>', '')
+    || coalesce(E'\n  🔐 <code>' || access_note || '</code>', ''),
     E'\n'
     order by asset_name
   )

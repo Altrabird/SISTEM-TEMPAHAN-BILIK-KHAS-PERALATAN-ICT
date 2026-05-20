@@ -61,6 +61,10 @@ create table if not exists public.assets (
     check (status in ('available', 'borrowed', 'maintenance'))
 );
 alter table public.assets add column if not exists locked_reason text;
+alter table public.assets add column if not exists hidden boolean not null default false;
+-- Admin-seeded access info (laptop password, login PIN, app key). Visible only
+-- to admin in edit modals and to the active borrower on their loan card.
+alter table public.assets add column if not exists access_note text;
 
 create index if not exists assets_resource_id_idx on public.assets (resource_id);
 create index if not exists assets_status_idx on public.assets (status);

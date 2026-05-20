@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   X, Save, Pencil, Image as ImageIcon, Camera, Trash2, Loader2, AlertCircle, Laptop,
-  Lock, Unlock,
+  Lock, Unlock, KeyRound,
 } from 'lucide-react';
 import { Asset, Resource } from '../types';
 import { uploadAssetImage } from '../lib/storage';
@@ -72,6 +72,9 @@ export function EditAssetModal({ open, asset, equipment, onClose, onSave, onDele
       specifications: draft.specifications.trim(),
       lockedReason: draft.lockedReason && draft.lockedReason.trim().length > 0
         ? draft.lockedReason.trim()
+        : undefined,
+      accessNote: draft.accessNote && draft.accessNote.trim().length > 0
+        ? draft.accessNote.trim()
         : undefined,
     };
     onSave(cleaned);
@@ -243,6 +246,29 @@ export function EditAssetModal({ open, asset, equipment, onClose, onSave, onDele
                   </div>
                 )}
               </Field>
+
+              {/* Access note (admin-only edit; surfaces to borrower on loan card + Telegram) */}
+              <div className="rounded-xl border border-amber-200 bg-amber-50/60 p-3 space-y-2">
+                <div className="flex items-start gap-2">
+                  <KeyRound size={13} className="text-amber-600 mt-0.5 shrink-0" />
+                  <div className="min-w-0 flex-1">
+                    <label className="text-[10px] font-bold uppercase tracking-widest text-amber-700">
+                      Nota Akses (pilihan)
+                    </label>
+                    <p className="text-[10px] text-amber-700/80 leading-snug mt-0.5">
+                      Contoh: <span className="font-mono">User: pelajar · Pass: skbt2026</span>. Admin sahaja yang nampak
+                      di sini; akan dihantar via Telegram + dipapar pada kad pinjaman peminjam aktif.
+                    </p>
+                  </div>
+                </div>
+                <textarea
+                  rows={2}
+                  placeholder="Username / password / PIN untuk unit ini..."
+                  value={draft.accessNote ?? ''}
+                  onChange={(e) => setDraft({ ...draft, accessNote: e.target.value })}
+                  className="w-full px-3 py-2 rounded-lg border border-amber-300 text-sm font-mono bg-white focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none transition-all resize-none"
+                />
+              </div>
 
               {/* Lock section (consistent with EditResourceModal) */}
               <div className={`rounded-xl border p-4 space-y-3 transition-colors ${

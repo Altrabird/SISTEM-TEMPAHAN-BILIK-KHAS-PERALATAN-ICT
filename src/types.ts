@@ -28,6 +28,11 @@ export interface Asset {
    *  with a "hidden" indicator. Independent of `lockedReason` (which
    *  shows the unit but blocks booking with a reason). */
   hidden?: boolean;
+  /** Admin-seeded access info (laptop password, login PIN, app key, etc.)
+   *  surfaced to the borrower while the unit is on loan and in the new-loan
+   *  Telegram message. Pengguna lain tidak nampak — admin sahaja yang boleh
+   *  edit, dan hanya peminjam aktif yang lihat di kad pinjaman mereka. */
+  accessNote?: string;
 }
 
 export interface Resource {

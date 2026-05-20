@@ -86,9 +86,9 @@ src/
     ├── ReturnLoanModal.tsx     Mark loan as returned + condition notes
     ├── BulkReturnModal.tsx     Confirm batch return + shared notes
     ├── AssetListModal.tsx      Asset grid for a category (+ eye toggle on each unit)
-    ├── AddAssetModal.tsx       Admin: register new unit (within existing category)
+    ├── AddAssetModal.tsx       Admin: register new unit (within existing category, + Nota Akses)
     ├── AddResourceModal.tsx    Admin: register NEW room or equipment category
-    ├── EditAssetModal.tsx      Admin: full asset edit (incl. delete)
+    ├── EditAssetModal.tsx      Admin: full asset edit (incl. Nota Akses + delete)
     ├── EditResourceModal.tsx   Admin: room/category edit (incl. lock + Zon Bahaya delete)
     ├── EditProfileModal.tsx    Self profile edit (avatar upload)
     ├── LockAssetModal.tsx      Quick lock/unlock with reason
@@ -276,7 +276,7 @@ certbot --nginx -d tempah.altrabird.click
 
 ---
 
-## 10. What's done (v1.9.0)
+## 10. What's done (v1.9.1)
 
 ### Core booking flows
 - ✅ Bilik Khas booking with time-slot conflict detection
@@ -295,6 +295,7 @@ certbot --nginx -d tempah.altrabird.click
 - ✅ **NEW v1.8**: Create new Bilik Khas + new Peralatan ICT category from the admin UI (was previously seed-only)
 - ✅ **NEW v1.8**: Delete category from EditResourceModal "Zon Bahaya" with cascade-aware confirms (child assets get cleaned up automatically)
 - ✅ Per-asset QR sticker + bulk sticker sheet (A4, 18-up)
+- ✅ **NEW v1.9.1**: Per-asset **Nota Akses** (laptop password / PIN / login info) — admin edits once on the asset, surfaces automatically on the borrower's loan card (with one-tap Salin) and in the new-loan Telegram message
 
 ### Profiles + portfolio
 - ✅ Profile + portfolio (avatar upload, achievements, streak, charts)
@@ -349,6 +350,9 @@ certbot --nginx -d tempah.altrabird.click
 - ✅ **NEW v1.9**: Bulk room booking (Julat Hari / Pukal): ONE
   consolidated digest via `bulk_book_rooms()` RPC (suppress flag
   `tempah.suppress_booking_notify`)
+- ✅ **NEW v1.9.1**: New-loan messages (single + bulk) auto-include
+  the asset's `🔐 Nota Akses` line when set, so the peminjam gets the
+  laptop password the moment the booking is approved
 - ✅ Daily 06:30 MY morning digest of today's rooms + multi-day loans
 - ✅ Daily 08:00 MY overdue + due-tomorrow ICT reminder
 

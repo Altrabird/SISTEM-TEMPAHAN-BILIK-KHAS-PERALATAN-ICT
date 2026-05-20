@@ -2,7 +2,78 @@
 
 Major milestones for the TEMPAH project.
 
-## v1.9.0 — Range + Bulk Room Booking (current)
+## v1.9.1 — Nota Akses per-Aset (current)
+
+**Setiap unit ICT kini boleh mempunyai "Nota Akses" admin-only — kata
+laluan laptop, PIN aplikasi, atau apa-apa info akses kongsi. Bila aset
+itu dipinjam, nota dihantar serta-merta ke Telegram dan dipaparkan
+pada kad pinjaman peminjam dengan butang "Salin" sekali tap.**
+
+### Kenapa
+
+Sekolah biasa kongsi password untuk laptop pelajar (cth: `pelajar /
+skbt2026`). Sebelum ini, admin terpaksa beritahu peminjam secara
+manual setiap kali. Sekarang, nota disimpan sekali pada aset itu dan
+auto-disampaikan setiap pinjaman.
+
+### Lokasi UI
+
+- **Admin (sahaja yang boleh edit)**:
+  - `AddAssetModal` & `EditAssetModal` — kotak amber "Nota Akses
+    (pilihan)" di atas bahagian Kunci, dengan placeholder & helper
+    text yang jelas.
+  - `ActiveLoansView` — baris admin tunjuk nota inline (truncated)
+    sebagai rujukan.
+- **Peminjam (auto)**:
+  - `MyLoansView` — kad pinjaman aktif kini ada banner amber dengan
+    nota + butang "Salin" yang panggil `navigator.clipboard.writeText`
+    + flash "Salin!" 1.5 saat.
+  - Telegram notification — baris `🔐 Nota Akses: <code>...</code>`
+    dilampirkan pada mesej "Pinjaman ICT Baharu" dan setiap unit dalam
+    digest "Pinjaman Pukal ICT".
+
+### Privacy / RLS
+
+Lajur `assets.access_note` adalah `text` biasa, tidak disorok di
+peringkat database (RLS sedia ada `read all assets` membaca semua
+kolum). Penyembunyian dilakukan di UI:
+
+- Borrower nampak nota hanya jika `booking.userId === profile.id` dan
+  pinjaman masih `status !== 'returned'`.
+- Admin nampak di modal edit + admin table.
+- Pengguna lain langsung tidak ada lokasi untuk lihat — kad aset awam
+  & senarai pilihan **tidak** baca medan `accessNote`.
+
+Jika sekolah perlukan privacy lebih ketat (cth: encrypt at rest),
+ini adalah pivot point untuk migrate ke pgsodium / Vault — tetapi
+tidak dilakukan dalam v1.9.1 sebab use case adalah password kongsi
+yang **memang** sengaja dikongsi dengan peminjam.
+
+### Perubahan SQL
+
+| Objek | Perubahan |
+|---|---|
+| `public.assets` | `+ access_note text` (nullable) |
+| `public.notify_booking_telegram()` | SELECT lampiran `access_note` + baris `🔐 Nota Akses` bila is_loan & note ada. Juga tambah suppress check untuk `tempah.suppress_booking_notify` (housekeeping — sebelum ini hanya `suppress_loan_notify` di sini). |
+| `public.bulk_loan_assets()` | Per-unit lines dalam digest kini ada baris `🔐 <code>...</code>` bila aset itu ada nota. |
+
+Migration name: `add_access_note_to_assets_and_notify` (idempotent).
+File reference: `supabase/schema.sql` + `supabase/notify_setup.sql`.
+
+### Files
+
+- `src/types.ts` — Asset gets `accessNote?: string`
+- `src/lib/storage.ts` — `rowToAsset()` + `upsertAssetToCloud()`
+  round-trip `access_note`
+- `src/components/AddAssetModal.tsx` & `EditAssetModal.tsx` — amber
+  textarea card with `KeyRound` icon
+- `src/views/MyLoansView.tsx` — `<AccessNoteBlock>` inline component
+  with copy-to-clipboard
+- `src/views/ActiveLoansView.tsx` — admin row tunjuk nota truncated
+
+---
+
+## v1.9.0 — Range + Bulk Room Booking
 
 **The Borang Tempahan form now has three modes. The teacher can book a
 single slot (existing behaviour), a contiguous range of days
