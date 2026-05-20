@@ -5,9 +5,10 @@
  * server-side (service-role, bypasses RLS), then emails the asset's
  * Nota Akses to the borrower's profile email via Gmail SMTP.
  *
- * Required env vars (set via Supabase Dashboard → Edge Functions → Manage secrets):
- *   - GMAIL_USER          (e.g. tempah.skbt@gmail.com)
- *   - GMAIL_APP_PASSWORD  (16-char App Password from Google security)
+ * Credentials live in Supabase Vault, not env vars:
+ *   - vault secret `gmail_user`          (e.g. tempah.skbt@gmail.com)
+ *   - vault secret `gmail_app_password`  (16-char App Password from Google)
+ * Read via `public.get_gmail_credentials()` RPC (SECURITY DEFINER, service_role only).
  *
  * SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY are auto-injected.
  *
@@ -73,20 +74,27 @@ serve(async (req) => {
 
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
     const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const GMAIL_USER = Deno.env.get("GMAIL_USER");
-    const GMAIL_APP_PASSWORD = Deno.env.get("GMAIL_APP_PASSWORD");
     const APP_URL = Deno.env.get("APP_URL") ?? "https://tempah.altrabird.click";
-
-    if (!GMAIL_USER || !GMAIL_APP_PASSWORD) {
-      return jsonResponse(500, {
-        error:
-          "Gmail credentials not configured. Set GMAIL_USER + GMAIL_APP_PASSWORD secrets.",
-      });
-    }
 
     const supabase = createClient(SUPABASE_URL, SERVICE_KEY, {
       auth: { persistSession: false },
     });
+
+    // Pull Gmail SMTP creds from Vault via the SECURITY DEFINER RPC.
+    // Same pattern as tg_send() in notify_setup.sql.
+    const { data: credsRows, error: credsError } = await supabase.rpc(
+      "get_gmail_credentials",
+    );
+    const creds = Array.isArray(credsRows) ? credsRows[0] : credsRows;
+    const GMAIL_USER = creds?.gmail_user;
+    const GMAIL_APP_PASSWORD = creds?.gmail_app_password;
+    if (credsError || !GMAIL_USER || !GMAIL_APP_PASSWORD) {
+      console.error("Vault read failed:", credsError, creds);
+      return jsonResponse(500, {
+        error:
+          "Gmail credentials not in Vault. Run the add_gmail_secrets_to_vault migration.",
+      });
+    }
 
     // 1. Loan
     const { data: loan, error: loanError } = await supabase
