@@ -8,6 +8,7 @@ import { Asset, Booking, Profile, Resource } from '../types';
 import { isAssetLocked, isResourceLocked, lockReasonOf } from '../lib/locks';
 import { isHiddenFromUser } from '../lib/visibility';
 import { todayLocalISO } from '../lib/dates';
+import { TelegramJoinPill } from './TelegramJoinPill';
 
 interface Props {
   open: boolean;
@@ -159,6 +160,9 @@ export function ScannedActionSheet({
               >
                 <SearchIcon size={12} /> Imbas Lagi
               </button>
+
+              {/* Telegram opt-in CTA — hidden when env explicitly disables it */}
+              <TelegramJoinPill />
             </div>
           </motion.div>
         </div>

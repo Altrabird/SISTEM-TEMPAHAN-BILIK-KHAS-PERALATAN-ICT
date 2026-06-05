@@ -96,6 +96,10 @@ src/
     ├── QRScannerModal.tsx      In-app camera scanner (html5-qrcode + manual entry)
     ├── ScannedActionSheet.tsx  Smart router — resolves scanned id → context actions
     ├── ScanFab.tsx             Mobile floating scan button (fixed, glowing halo)
+    ├── TelegramJoinPill.tsx    v1.9.3 — opt-in CTA component, two variants
+    │                           (compact / card). Env-aware: hides entirely
+    │                           when VITE_TELEGRAM_INVITE_URL="". Used in
+    │                           ScannedActionSheet, MyLoansView, SettingsView.
     └── PWAUpdatePrompt.tsx     Auto-update banner
 
 deploy/
@@ -108,7 +112,9 @@ supabase/
 ├── notify_setup.sql           Telegram trigger + cron + Vault setup
 └── functions/
     └── send-password-email/   v1.9.2 — Gmail SMTP for Nota Akses delivery
-        └── index.ts           Deno + denomailer; reads GMAIL_USER + GMAIL_APP_PASSWORD env
+        └── index.ts           Deno + denomailer; reads gmail_user + gmail_app_password
+                               from Vault via get_gmail_credentials() RPC. verify_jwt OFF
+                               (project uses sb_publishable_... key, not JWT).
 
 public/
 ├── favicon.ico                Generated — regenerate via `npm run icons`
@@ -282,7 +288,7 @@ certbot --nginx -d tempah.altrabird.click
 
 ---
 
-## 10. What's done (v1.9.2)
+## 10. What's done (v1.9.3)
 
 ### Core booking flows
 - ✅ Bilik Khas booking with time-slot conflict detection
@@ -333,6 +339,12 @@ certbot --nginx -d tempah.altrabird.click
 - ✅ First-visit instruction tooltip on the FAB, auto-dismisses
 - ✅ Per-room QR code (Bilik Khas) — admin-only generate + print sticker
 - ✅ Symmetric deep-links: `?loan=ast-X` (ICT) and `?book=room-X` (rooms)
+- ✅ **NEW v1.9.3**: QR codes confirmed universally scannable — payload
+  is plain HTTPS URL, any phone camera / Google Lens / WhatsApp scanner
+  reads it and opens the PWA. In-app `TelegramJoinPill` CTA surfaces
+  the Telegram group at 3 high-traffic spots (scan result sheet, loans
+  view, settings) so users discover the notification channel without
+  changing the QR payload
 
 ### UI
 - ✅ Card / List view toggle for Bilik Khas + Peralatan ICT
@@ -428,11 +440,20 @@ curl https://tempah.altrabird.click/manifest.webmanifest
 - Per-asset **Nota Akses** (laptop passwords etc., column `assets.access_note`)
   is delivered ONLY via the `send-password-email` Edge Function to
   the borrower's profile email — never via Telegram, never inline
-  in any view. Required env secrets on the function:
-  `GMAIL_USER` + `GMAIL_APP_PASSWORD` (set via Supabase Dashboard →
-  Edge Functions → Manage secrets). If you ever surface this column
-  to a user-facing screen again, you're re-introducing the leak that
-  v1.9.2 closed.
+  in any view. Credentials live in **Supabase Vault** (NOT env vars):
+  `gmail_user` + `gmail_app_password`, read via
+  `public.get_gmail_credentials()` SECURITY DEFINER RPC. Same pattern
+  as `tg_send()` reading `tg_bot_token`. To rotate the App Password,
+  use `vault.update_secret()` — direct UPDATE on `vault.secrets` is
+  permission-locked even via apply_migration. Edge function does NOT
+  need redeploy after rotation (Vault read on every invocation).
+  `verify_jwt: false` on the function is intentional — project uses
+  publishable key format `sb_publishable_...`, not a real JWT. Security
+  is preserved by service-role-only server-side lookups + the password
+  always going to the borrower's profile email (never to a
+  caller-supplied address). If you ever surface this column to a
+  user-facing screen again, you're re-introducing the leak that v1.9.2
+  closed.
 - For ANY change that mass-inserts or mass-updates rows AND has a
   per-row trigger, always use the suppress-config pattern — otherwise
   you spam the Telegram group. Three flags currently exist:

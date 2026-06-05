@@ -3,6 +3,7 @@ import { Save, RefreshCw, Database, User, Cloud, CloudOff, LogOut } from 'lucide
 import { Profile } from '../types';
 import { ROLE_LABELS } from '../constants';
 import { isSupabaseEnabled } from '../lib/supabase';
+import { TelegramJoinPill } from '../components/TelegramJoinPill';
 
 interface Props {
   profile: Profile | null;
@@ -141,6 +142,19 @@ export function SettingsView({ profile, onReset, onSaveProfile, onSwitchProfile 
         </div>
       )}
 
+      {/* Telegram opt-in CTA — admin discovery surface */}
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-8 space-y-4">
+        <h3 className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
+          Saluran Pemberitahuan
+        </h3>
+        <TelegramJoinPill variant="card" />
+        <p className="text-[11px] text-slate-500 leading-relaxed">
+          Pemberitahuan tempahan baharu, pemulangan, dan ringkasan harian
+          dihantar ke saluran ini. Bagi peminjam yang ingin terima notifikasi
+          rasmi tanpa buka aplikasi.
+        </p>
+      </div>
+
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-8 space-y-4">
         <h3 className="text-[10px] font-bold uppercase tracking-widest text-slate-400 flex items-center gap-2">
           <Database size={12} /> Backend
@@ -190,7 +204,7 @@ export function SettingsView({ profile, onReset, onSaveProfile, onSwitchProfile 
       <div className="grid grid-cols-2 gap-4">
         <div className="p-4 bg-white border border-slate-200 rounded-xl">
           <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Versi Stabil</p>
-          <p className="text-sm font-bold text-slate-700">v1.9.2</p>
+          <p className="text-sm font-bold text-slate-700">v1.9.3</p>
         </div>
         <div className="p-4 bg-white border border-slate-200 rounded-xl">
           <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Tahun Aktif</p>

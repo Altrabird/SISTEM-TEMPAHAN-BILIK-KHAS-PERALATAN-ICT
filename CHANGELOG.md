@@ -2,12 +2,94 @@
 
 Major milestones for the TEMPAH project.
 
-## v1.9.2 — Nota Akses ke Email Peminjam (current)
+## v1.9.3 — Telegram CTA + universal QR scanning (current)
+
+**Penemuan saluran Telegram dijadikan first-class dalam app. QR codes
+sebenarnya sudah boleh discan oleh apa-apa app (kamera iPhone/Android,
+Google Lens, dll. — payload ialah plain HTTPS URL), tetapi sebelum ini
+peminjam tiada cara nampak Telegram group selain dari pemberitahuan
+yang sudah dihantar. Sekarang ada CTA yang konsisten di tiga
+high-traffic surfaces, dan link itu sendiri configurable per-deployment.**
+
+### Mengapa
+
+- Admin sekolah pernah tanya: "boleh ke QR dibaca oleh app lain?" —
+  Jawapannya YA, sudah boleh sejak v1.7 (encode plain URL). Tapi soalan
+  tu menonjolkan satu peluang: selepas user scan dan masuk app, tiada
+  cue untuk mereka *sertai grup Telegram* yang dah ada notifikasi auto.
+- Daripada ubah payload QR (yang akan rosakkan kompatibiliti generic
+  scanner), tambah in-app CTA yang muncul *selepas* user mendarat —
+  cara paling clean.
+
+### Surface placement
+
+| Tempat | Variant | Bila muncul |
+|---|---|---|
+| `ScannedActionSheet` | Compact pill | Selepas setiap imbasan berjaya (asset/room/category/hidden/unknown — semua state) |
+| `MyLoansView` | Card (full) | Hanya bila pengguna sudah ada ≥ 1 pinjaman (avoid cold first-visit push) |
+| `SettingsView` | Card (full) | Dalam section baharu "Saluran Pemberitahuan" — admin discovery |
+
+### Configurable per-deployment
+
+Tiga env var baharu (semua optional):
+
+```
+VITE_TELEGRAM_INVITE_URL=https://t.me/+xxxxxxxxxxxxx   # group invite (recommended)
+VITE_TELEGRAM_GROUP_LABEL=Tempah@SKBT                  # display name
+```
+
+Fallback behaviour:
+- `VITE_TELEGRAM_INVITE_URL` tidak diset → default `https://t.me/TempahSKBT_bot`
+  (bot DM — always works as a destination, no admin approval needed)
+- `VITE_TELEGRAM_INVITE_URL=""` (empty string) → CTA disembunyikan
+  langsung di setiap surface (untuk deployment yang tak nak expose
+  saluran)
+- Label berubah secara automatik: "Sertai grup ..." untuk group invite,
+  "Chat bot ..." untuk bot fallback
+
+### Files baharu/diubah
+
+- `src/components/TelegramJoinPill.tsx` — **NEW** reusable component,
+  dua variant (compact / card), env-aware, opt-out via empty string
+- `src/constants.ts` — `TELEGRAM_INVITE_URL` + `TELEGRAM_GROUP_LABEL` exports
+- `src/vite-env.d.ts` — types untuk dua env var baharu
+- `src/components/ScannedActionSheet.tsx` — pill selepas "Imbas Lagi"
+- `src/views/MyLoansView.tsx` — card di atas hero bila ada pinjaman
+- `src/views/SettingsView.tsx` — section "Saluran Pemberitahuan" + label v1.9.3
+
+### Operational note (admin)
+
+QR codes tidak perlu reprint. Payload tidak berubah — sticker yang
+sudah ditampal pada laptop / pintu bilik kekal berfungsi. CTA ini
+murni in-app addition; user mendarat di PWA dulu (samada melalui
+in-app scanner atau generic phone camera), kemudian nampak CTA.
+
+Untuk dapatkan link invite grup:
+1. Admin grup Telegram → tap nama grup → **Invite via Link** → Copy
+2. Set `VITE_TELEGRAM_INVITE_URL=https://t.me/+xxxxx` di `.env.production`
+   pada VPS, atau `.env.local` untuk dev
+3. Rebuild + redeploy (`/opt/tempah/deploy/deploy.sh`)
+
+Sebelum link invite disediakan, CTA tetap muncul sebagai "Chat bot
+Tempah@SKBT" yang membawa user ke bot DM — masih useful tapi tidak
+seoptimum group invite.
+
+---
+
+## v1.9.2 — Nota Akses ke Email Peminjam (**MILESTONE shipped & verified 2026-05-20**)
 
 **Pivot keselamatan: kata laluan tidak lagi muncul di Telegram group
 chat atau di mana-mana skrin app. Sebaliknya, Nota Akses dihantar
 terus ke email peribadi peminjam melalui Gmail SMTP, dengan logik
 "first time = auto, repeat = opt-in" supaya inbox tidak di-spam.**
+
+> **Status milestone (2026-05-20)**: Edge Function `send-password-email`
+> versi 3 ACTIVE. Vault secrets `gmail_user` + `gmail_app_password`
+> tersedia + sudah dirotasi sekali (App Password lama revoke, baru
+> aktif). Dua smoke test (`auto` + `resend`) lulus dengan HTTP 200,
+> emel diterima pada inbox peminjam. Commits: `00aa345` (security pivot
+> + 3-mode UI) + `cacb21d` (Vault migration). Frontend v1.9.2 bersedia
+> untuk deploy ke VPS bila admin jalankan `deploy.sh`.
 
 ### Mengapa
 
@@ -37,10 +119,34 @@ maklumat sulit.
   - SMTP via `smtp.gmail.com:465` TLS implicit
   - HTML email berformat (gradient header, monospace credentials block,
     branded footer) + plain-text fallback
-- **Env secrets** (set via Supabase Dashboard → Edge Functions → Manage secrets):
-  - `GMAIL_USER` — e.g. `tempah.skbt@gmail.com`
-  - `GMAIL_APP_PASSWORD` — 16-aksara App Password dari Google
+  - `verify_jwt: false` — sengaja, sebab project guna publishable key
+    format `sb_publishable_...` (bukan JWT). Keselamatan dijaga oleh:
+    (a) loanId mesti valid, (b) semua lookup server-side via service_role,
+    (c) password sentiasa pergi ke email yang dinyatakan oleh `loan.user_id`
+    — bukan email yang dikirim pemanggil.
+- **Credentials dalam Supabase Vault** (bukan env vars):
+  - `gmail_user` — e.g. `tempah.skbt@gmail.com`
+  - `gmail_app_password` — 16-aksara App Password dari Google
+  - Dibaca oleh edge function via RPC `public.get_gmail_credentials()`
+    (SECURITY DEFINER, hanya service_role boleh panggil) — sama pattern
+    seperti `tg_send()` yang baca `tg_bot_token` + `tg_chat_id`.
 - **Auto-injected**: `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`
+
+### Rotation procedure (bila App Password perlu diganti)
+
+`vault.secrets` tidak boleh di-UPDATE terus walaupun via apply_migration
+(permission locked). Guna `vault.update_secret()` API sebaliknya:
+
+```sql
+select vault.update_secret(
+  (select id from vault.decrypted_secrets where name = 'gmail_app_password' limit 1),
+  'newpasswordwithoutspaces'
+);
+```
+
+Edge function tak perlu redeploy — `get_gmail_credentials()` dibaca
+setiap invocation. Selepas rotation, revoke App Password lama di
+[myaccount.google.com/apppasswords](https://myaccount.google.com/apppasswords).
 
 ### Perubahan SQL
 
@@ -68,12 +174,31 @@ lajur `assets.access_note` kekal — hanya jalan keluarnya yang berubah.
 ### Setup untuk admin (sekali sahaja)
 
 1. Buat Gmail account khas, cth: `tempah.skbt@gmail.com`
-2. Enable 2FA di Google Account → Security
+2. Enable **2-Step Verification** di Google Account → Security (mesti
+   "ON" — Authenticator app sahaja tidak cukup untuk expose App Passwords)
 3. Generate App Password 16-aksara di [myaccount.google.com/apppasswords](https://myaccount.google.com/apppasswords)
-4. Di Supabase Dashboard → project → Edge Functions → Manage secrets:
-   - `GMAIL_USER` = `tempah.skbt@gmail.com`
-   - `GMAIL_APP_PASSWORD` = `xxxx xxxx xxxx xxxx` (16-aksara, tanpa ruang OK)
-5. Selesai — pinjam aset yang ada nota akses, email auto sampai
+   (URL terus — App Passwords tidak muncul di Security page biasa).
+   Jika "Skip password when possible" ON, terpaksa OFF-kan dulu.
+4. Simpan ke Supabase Vault via apply_migration (atau Dashboard → SQL editor):
+   ```sql
+   select vault.create_secret('tempah.skbt@gmail.com', 'gmail_user');
+   select vault.create_secret('xxxxxxxxxxxxxxxx', 'gmail_app_password');  -- 16-aksara tanpa ruang
+   ```
+   Bonus: pasang juga RPC reader (sekali sahaja):
+   ```sql
+   create or replace function public.get_gmail_credentials()
+   returns table(gmail_user text, gmail_app_password text)
+   language sql security definer set search_path = vault, public
+   as $$
+     select
+       (select decrypted_secret from vault.decrypted_secrets where name = 'gmail_user'),
+       (select decrypted_secret from vault.decrypted_secrets where name = 'gmail_app_password');
+   $$;
+   revoke all on function public.get_gmail_credentials() from public, anon, authenticated;
+   grant execute on function public.get_gmail_credentials() to service_role;
+   ```
+5. Deploy edge function: `supabase functions deploy send-password-email --no-verify-jwt`
+6. Selesai — pinjam aset yang ada nota akses, email auto sampai
 
 ---
 

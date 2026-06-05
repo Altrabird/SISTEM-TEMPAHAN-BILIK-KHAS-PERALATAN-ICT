@@ -8,6 +8,7 @@ import {
 import { Asset, Booking, Profile, Resource } from '../types';
 import { todayLocalISO, daysBetween } from '../lib/dates';
 import { sendLoanPasswordEmail } from '../lib/storage';
+import { TelegramJoinPill } from '../components/TelegramJoinPill';
 
 interface Props {
   profile: Profile | null;
@@ -140,6 +141,10 @@ export function MyLoansView({ profile, bookings, assets, equipment, onReturn, on
           </div>
         </div>
       </motion.div>
+
+      {/* Telegram opt-in CTA — only shown when the user has at least one loan
+          (engaged users), to avoid pushing it on a totally cold first visit. */}
+      {myLoans.length > 0 && <TelegramJoinPill variant="card" />}
 
       {/* Empty state — no loans at all */}
       {myLoans.length === 0 && (

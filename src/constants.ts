@@ -87,6 +87,22 @@ export const ADMIN_DEFAULTS = {
   email: 'admin@skbt.edu.my',
 };
 
+/** Public Telegram destination surfaced as a CTA in scan results,
+ *  loans view, and settings. The QR codes themselves still encode plain
+ *  HTTPS URLs (universally scannable) — this is the in-app CTA users see
+ *  AFTER landing in the app. Override via VITE_TELEGRAM_INVITE_URL in
+ *  .env.local / .env.production. Set to empty string to hide all CTAs. */
+const TELEGRAM_INVITE_RAW = import.meta.env.VITE_TELEGRAM_INVITE_URL as
+  | string
+  | undefined;
+export const TELEGRAM_INVITE_URL =
+  TELEGRAM_INVITE_RAW === undefined
+    ? 'https://t.me/TempahSKBT_bot' // safe fallback — bot DM always works
+    : TELEGRAM_INVITE_RAW.trim();
+export const TELEGRAM_GROUP_LABEL =
+  (import.meta.env.VITE_TELEGRAM_GROUP_LABEL as string | undefined) ??
+  'Tempah@SKBT';
+
 export const ACHIEVEMENTS: Achievement[] = [
   {
     id: 'first_booking',
