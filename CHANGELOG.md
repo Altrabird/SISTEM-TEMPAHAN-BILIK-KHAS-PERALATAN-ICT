@@ -25,9 +25,15 @@ high-traffic surfaces, dan link itu sendiri configurable per-deployment.**
 
 | Tempat | Variant | Bila muncul |
 |---|---|---|
-| `ScannedActionSheet` | Compact pill | Selepas setiap imbasan berjaya (asset/room/category/hidden/unknown — semua state) |
+| `OnboardingModal` | Compact pill | Muka awal sebelum buat profil (mode Cipta Baru / Profil Sedia Ada). Tersembunyi pada tab Log Masuk Pentadbir. **Surface paling awal** — setiap user baru mendarat di sini |
+| `LoanModal` | Compact pill | Selepas borang pinjam — menangkap scan sticker **ICT** (`?loan=ast-X` buka modal ini terus, bukan action sheet) |
+| `ScannedActionSheet` | Compact pill | Selepas setiap imbasan berjaya (asset/room/category/hidden/unknown — semua state). Termasuk scan sticker **bilik** |
 | `MyLoansView` | Card (full) | Hanya bila pengguna sudah ada ≥ 1 pinjaman (avoid cold first-visit push) |
 | `SettingsView` | Card (full) | Dalam section baharu "Saluran Pemberitahuan" — admin discovery |
+
+Liputan penuh: muka awal (onboarding) + semua laluan QR (sticker ICT →
+LoanModal, sticker bilik + in-app scanner → ScannedActionSheet) + loans
+view + settings. Tiada lagi laluan "buta" yang tak nampak link Telegram.
 
 ### Configurable per-deployment
 
@@ -53,9 +59,12 @@ Fallback behaviour:
   dua variant (compact / card), env-aware, opt-out via empty string
 - `src/constants.ts` — `TELEGRAM_INVITE_URL` + `TELEGRAM_GROUP_LABEL` exports
 - `src/vite-env.d.ts` — types untuk dua env var baharu
+- `src/components/OnboardingModal.tsx` — pill footer pada welcome flow (bukan admin tab)
+- `src/components/LoanModal.tsx` — pill footer selepas borang pinjam
 - `src/components/ScannedActionSheet.tsx` — pill selepas "Imbas Lagi"
 - `src/views/MyLoansView.tsx` — card di atas hero bila ada pinjaman
 - `src/views/SettingsView.tsx` — section "Saluran Pemberitahuan" + label v1.9.3
+- `.env.example` — template untuk `VITE_TELEGRAM_INVITE_URL` + `VITE_TELEGRAM_GROUP_LABEL`
 
 ### Operational note (admin)
 

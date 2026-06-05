@@ -7,6 +7,7 @@ import { Asset, Booking, Profile, Resource } from '../types';
 import { PURPOSE_PRESETS } from '../constants';
 import { todayLocalISO, addDaysLocalISO, daysBetween } from '../lib/dates';
 import { isFirstBorrowOfAsset } from '../lib/loanEmail';
+import { TelegramJoinPill } from './TelegramJoinPill';
 
 interface Props {
   open: boolean;
@@ -341,6 +342,14 @@ export function LoanModal({
                 </p>
               )}
             </form>
+
+            {/* Telegram opt-in CTA — surfaces the group after a QR-driven
+                or manual loan. Covers the most common physical-sticker scan
+                (ICT asset → ?loan=ast-X → this modal). Hidden when
+                VITE_TELEGRAM_INVITE_URL="". */}
+            <div className="mt-5 pt-5 border-t border-slate-100">
+              <TelegramJoinPill variant="compact" />
+            </div>
           </motion.div>
         </div>
       )}

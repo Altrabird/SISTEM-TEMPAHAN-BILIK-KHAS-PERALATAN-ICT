@@ -7,6 +7,7 @@ import { Profile, UserRole } from '../types';
 import { ROLE_LABELS, ADMIN_DEFAULTS } from '../constants';
 import { isSupabaseEnabled } from '../lib/supabase';
 import { fetchProfilesFromCloud, fetchProfileById } from '../lib/storage';
+import { TelegramJoinPill } from './TelegramJoinPill';
 
 interface Props {
   onComplete: (p: Profile) => void;
@@ -370,6 +371,16 @@ export function OnboardingModal({ onComplete }: Props) {
                 <ArrowLeft size={12} /> Kembali ke pemilihan profil
               </button>
             </form>
+          )}
+
+          {/* Telegram opt-in CTA on the welcome flow. Hidden on the admin
+              login tab and when VITE_TELEGRAM_INVITE_URL is set to "". This
+              is the earliest discovery surface — every brand-new user lands
+              here before a profile exists. */}
+          {mode !== 'admin' && (
+            <div className="mt-6 pt-5 border-t border-slate-100">
+              <TelegramJoinPill variant="compact" />
+            </div>
           )}
 
         </div>

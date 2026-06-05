@@ -342,9 +342,12 @@ certbot --nginx -d tempah.altrabird.click
 - ✅ **NEW v1.9.3**: QR codes confirmed universally scannable — payload
   is plain HTTPS URL, any phone camera / Google Lens / WhatsApp scanner
   reads it and opens the PWA. In-app `TelegramJoinPill` CTA surfaces
-  the Telegram group at 3 high-traffic spots (scan result sheet, loans
-  view, settings) so users discover the notification channel without
-  changing the QR payload
+  the Telegram group at 5 spots — covering every entry path — without
+  changing the QR payload: **onboarding** (before profile, earliest
+  surface), **LoanModal** (ICT sticker scan → `?loan=`), **scan action
+  sheet** (room sticker + in-app scanner), **MyLoansView**, **Settings**.
+  Link configurable via `VITE_TELEGRAM_INVITE_URL` (defaults to bot DM;
+  `""` hides all CTAs)
 
 ### UI
 - ✅ Card / List view toggle for Bilik Khas + Peralatan ICT
