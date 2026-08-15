@@ -2,7 +2,66 @@
 
 Major milestones for the TEMPAH project.
 
-## v1.9.4 — Kawalan notifikasi, pembatalan oleh admin, jam masa sebenar (current)
+## v1.9.5 — Arkib & padam profil guru (current)
+
+**Guru yang sudah bertukar sekolah kekal dalam senarai, leaderboard dan
+pemilihan profil selama-lamanya — tiada cara untuk admin mengeluarkan
+mereka. Sekarang ada dua tindakan: Arkib (boleh dipulihkan) dan Padam
+Kekal (untuk profil pendua/ujian).**
+
+### Mengapa dua tindakan, bukan satu
+
+Dua masalah berbeza yang kelihatan sama:
+
+| Masalah | Tindakan | Kesan |
+|---|---|---|
+| Guru bertukar sekolah | **Arkib** | Hilang dari leaderboard, laporan dan "Profil Sedia Ada". Baris, portfolio, pencapaian dan streak kekal. Boleh dipulihkan satu klik |
+| Profil pendua / ujian (cth. `NUR SHAZWANI` + `Shazwani`) | **Padam Kekal** | Baris dipadam terus. Tiada undo |
+
+Arkib ialah tindakan utama; padam kekal tersembunyi di belakang
+pautan "Tunjuk pilihan padam kekal" dan memerlukan menaip `PADAM`.
+
+### Sejarah tempahan tidak terjejas
+
+`bookings.user_id` **tiada foreign key** ke `profiles` (rekabentuk asal),
+dan setiap tempahan menyimpan `user_name` secara denormalised. Jadi
+memadam profil tidak pernah cascade ke rekod tempahan — arkib dan
+laporan kekal lengkap walaupun orangnya sudah tiada.
+
+### Tiga pengawal
+
+1. **Tidak boleh buang profil sendiri** — admin akan terkunci keluar
+   dari sesi semasa.
+2. **Pinjaman ICT terbuka menyekat padam kekal** — memadam peminjam
+   bermakna satu unit berada di luar tanpa sesiapa untuk dikejar.
+   Modal menunjukkan kiraan dan menghalakan admin ke *Pinjaman ICT*
+   dahulu. Arkib masih dibenarkan (dengan amaran).
+3. **Padam kekal perlu taip `PADAM`.**
+
+### Nota RLS penting
+
+Jadual `profiles` sebelum ini hanya ada polisi SELECT / INSERT / UPDATE.
+Tanpa polisi DELETE, permintaan padam ditapis senyap kepada **0 baris** —
+butang yang nampak berfungsi tetapi sebenarnya tidak buat apa-apa.
+Polisi DELETE kini ditambah dalam `schema.sql`.
+
+### Files baharu/diubah
+
+- `supabase/schema.sql` — kolum `archived` / `archived_at` / `archived_by`,
+  indeks, dan polisi RLS DELETE untuk `profiles`
+- `src/components/RemoveProfileModal.tsx` — **NEW** modal arkib/padam
+- `src/lib/storage.ts` — `setProfileArchived`, `deleteProfileFromCloud`,
+  `rowToProfile` helper, dan `fetchProfilesFromCloud(includeArchived)`
+  yang **menapis arkib secara lalai** (jadi OnboardingModal + ReportsView
+  betul tanpa perubahan)
+- `src/views/AdminView.tsx` — butang urus per-baris, toggle "Tunjuk
+  diarkib", baris arkib dikelabukan, KPI "Total Guru" tidak mengira arkib
+- `src/types.ts` — `Profile.archived` / `archivedAt` / `archivedBy`
+- `src/App.tsx` — hantar `currentProfile` ke AdminView (pengawal diri)
+
+---
+
+## v1.9.4 — Kawalan notifikasi, pembatalan oleh admin, jam masa sebenar
 
 **Tiga kawalan yang selama ini tiada: admin kini boleh menentukan BILA
 bot Telegram dibenarkan bercakap (default hari bekerja sahaja), boleh

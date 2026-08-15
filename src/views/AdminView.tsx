@@ -2,15 +2,19 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   Users, CalendarDays, TrendingUp, MapPin, Shield, Search, RefreshCw,
-  ArrowUpDown, X, Crown, Trophy, ChevronRight, Cloud, CloudOff
+  ArrowUpDown, X, Crown, Trophy, ChevronRight, Cloud, CloudOff, Archive, UserMinus
 } from 'lucide-react';
 import { Asset, Booking, Resource, Profile } from '../types';
 import { ROLE_LABELS, ACHIEVEMENTS } from '../constants';
 import { computePortfolioStats } from '../lib/achievements';
-import { fetchProfilesFromCloud, fetchBookingsFromCloud } from '../lib/storage';
+import {
+  fetchProfilesFromCloud, fetchBookingsFromCloud,
+  setProfileArchived, deleteProfileFromCloud,
+} from '../lib/storage';
 import { isSupabaseEnabled } from '../lib/supabase';
 import { todayLocalISO } from '../lib/dates';
 import { resolveResourceName } from '../lib/resources';
+import { RemoveProfileModal } from '../components/RemoveProfileModal';
 import { PortfolioView } from './PortfolioView';
 
 interface Props {
@@ -18,12 +22,14 @@ interface Props {
   equipment: Resource[];
   assets: Asset[];
   localBookings: Booking[];
+  /** The signed-in admin — used to block self-removal. */
+  currentProfile: Profile | null;
 }
 
 type SortKey = 'name' | 'total' | 'thisMonth' | 'streak' | 'achievements' | 'lastActive';
 type SortDir = 'asc' | 'desc';
 
-export function AdminView({ rooms, equipment, assets, localBookings }: Props) {
+export function AdminView({ rooms, equipment, assets, localBookings, currentProfile }: Props) {
   const [profiles, setProfiles] = useState<Profile[] | null>(null);
   const [bookings, setBookings] = useState<Booking[]>(localBookings);
   const [loading, setLoading] = useState(true);
@@ -32,6 +38,8 @@ export function AdminView({ rooms, equipment, assets, localBookings }: Props) {
   const [sortKey, setSortKey] = useState<SortKey>('total');
   const [sortDir, setSortDir] = useState<SortDir>('desc');
   const [selectedProfileId, setSelectedProfileId] = useState<string | null>(null);
+  const [removingProfile, setRemovingProfile] = useState<Profile | null>(null);
+  const [showArchived, setShowArchived] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -42,13 +50,48 @@ export function AdminView({ rooms, equipment, assets, localBookings }: Props) {
       setLoading(false);
       return;
     }
-    const [p, b] = await Promise.all([fetchProfilesFromCloud(), fetchBookingsFromCloud()]);
+    // Admin is the one view that fetches archived staff too — everywhere
+    // else the default filter hides them.
+    const [p, b] = await Promise.all([fetchProfilesFromCloud(true), fetchBookingsFromCloud()]);
     if (p === null && b === null) {
       setError('Gagal sambung ke Supabase. Pastikan kunci VITE_SUPABASE_* betul.');
     }
     setProfiles(p ?? []);
     setBookings(b ?? localBookings);
     setLoading(false);
+  };
+
+  /** Open ICT loans per user — the guard that blocks permanent deletion of
+   *  someone who still has a unit out. */
+  const openLoansByUser = useMemo(() => {
+    const map = new Map<string, number>();
+    bookings.forEach((b) => {
+      if (b.resourceType === 'equipment' && b.status === 'confirmed') {
+        map.set(b.userId, (map.get(b.userId) ?? 0) + 1);
+      }
+    });
+    return map;
+  }, [bookings]);
+
+  const archiveProfile = async (p: Profile, archived: boolean): Promise<string | null> => {
+    const r = await setProfileArchived(p.id, archived, currentProfile?.name);
+    if (!r.ok) return r.error ?? 'Gagal kemas kini profil.';
+    setProfiles((prev) =>
+      (prev ?? []).map((x) =>
+        x.id === p.id
+          ? { ...x, archived, archivedAt: archived ? Date.now() : undefined, archivedBy: archived ? currentProfile?.name : undefined }
+          : x,
+      ),
+    );
+    return null;
+  };
+
+  const deleteProfile = async (p: Profile): Promise<string | null> => {
+    const r = await deleteProfileFromCloud(p.id);
+    if (!r.ok) return r.error ?? 'Gagal padam profil.';
+    setProfiles((prev) => (prev ?? []).filter((x) => x.id !== p.id));
+    if (selectedProfileId === p.id) setSelectedProfileId(null);
+    return null;
   };
 
   useEffect(() => {
@@ -64,11 +107,17 @@ export function AdminView({ rooms, equipment, assets, localBookings }: Props) {
     });
   }, [profiles, bookings, rooms, equipment]);
 
+  const archivedCount = useMemo(
+    () => (profiles ?? []).filter((p) => p.archived).length,
+    [profiles],
+  );
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
+    const visible = showArchived ? rows : rows.filter(({ profile: p }) => !p.archived);
     const list = !q
-      ? rows
-      : rows.filter(({ profile: p }) => {
+      ? visible
+      : visible.filter(({ profile: p }) => {
           return (
             p.name.toLowerCase().includes(q) ||
             (p.email?.toLowerCase().includes(q) ?? false) ||
@@ -88,7 +137,7 @@ export function AdminView({ rooms, equipment, assets, localBookings }: Props) {
       }
       return sortDir === 'asc' ? cmp : -cmp;
     });
-  }, [rows, search, sortKey, sortDir]);
+  }, [rows, search, sortKey, sortDir, showArchived]);
 
   const schoolStats = useMemo(() => {
     const now = new Date();
@@ -106,7 +155,9 @@ export function AdminView({ rooms, equipment, assets, localBookings }: Props) {
     });
 
     return {
-      totalUsers: profiles?.length ?? 0,
+      // Archived staff have left the school — they shouldn't inflate the
+      // headline "Total Guru" figure.
+      totalUsers: (profiles ?? []).filter((p) => !p.archived).length,
       totalBookings: active.length,
       thisMonth: active.filter((b) => b.date.startsWith(monthKey)).length,
       today: active.filter((b) => b.date === todayISO).length,
@@ -183,6 +234,19 @@ export function AdminView({ rooms, equipment, assets, localBookings }: Props) {
             <p className="text-base font-bold text-slate-800 leading-tight mt-0.5">
               {filtered.length} guru dipaparkan
             </p>
+            {archivedCount > 0 && (
+              <button
+                onClick={() => setShowArchived((v) => !v)}
+                className={`mt-2 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-widest border transition-all ${
+                  showArchived
+                    ? 'bg-slate-900 text-white border-slate-900'
+                    : 'bg-white text-slate-500 border-slate-200 hover:border-slate-400'
+                }`}
+              >
+                <Archive size={11} />
+                {showArchived ? 'Sembunyi diarkib' : `Tunjuk diarkib (${archivedCount})`}
+              </button>
+            )}
           </div>
           <div className="flex gap-2 items-center flex-1 sm:flex-none sm:w-72 max-w-full">
             <div className="flex-1 relative">
@@ -247,11 +311,13 @@ export function AdminView({ rooms, equipment, assets, localBookings }: Props) {
                   <tr
                     key={p.id}
                     onClick={() => setSelectedProfileId(p.id)}
-                    className="hover:bg-blue-50/50 transition-colors cursor-pointer group"
+                    className={`transition-colors cursor-pointer group ${
+                      p.archived ? 'bg-slate-50/80 opacity-60 hover:opacity-100' : 'hover:bg-blue-50/50'
+                    }`}
                   >
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-3">
-                        {idx < 3 && sortKey !== 'name' && sortKey !== 'lastActive' && (
+                        {idx < 3 && !p.archived && sortKey !== 'name' && sortKey !== 'lastActive' && (
                           <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-black ${
                             idx === 0 ? 'bg-yellow-100 text-yellow-700' :
                             idx === 1 ? 'bg-slate-200 text-slate-700' :
@@ -268,7 +334,14 @@ export function AdminView({ rooms, equipment, assets, localBookings }: Props) {
                           </div>
                         )}
                         <div className="min-w-0">
-                          <p className="text-sm font-bold text-slate-800 truncate">{p.name}</p>
+                          <p className="text-sm font-bold text-slate-800 truncate flex items-center gap-1.5">
+                            {p.name}
+                            {p.archived && (
+                              <span className="text-[8px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded bg-slate-200 text-slate-600 shrink-0">
+                                Diarkib
+                              </span>
+                            )}
+                          </p>
                           <p className="text-[10px] text-slate-500 truncate">
                             {ROLE_LABELS[p.role] ?? p.role}
                             {p.department && ` • ${p.department}`}
@@ -303,8 +376,17 @@ export function AdminView({ rooms, equipment, assets, localBookings }: Props) {
                     <td className="px-6 py-4 text-[11px] text-slate-500 whitespace-nowrap">
                       {new Date(p.lastActiveAt).toLocaleDateString('ms-MY', { day: 'numeric', month: 'short', year: 'numeric' })}
                     </td>
-                    <td className="px-4 py-4 text-right">
-                      <ChevronRight size={16} className="text-slate-300 group-hover:text-blue-600 group-hover:translate-x-0.5 transition-all" />
+                    <td className="px-4 py-4">
+                      <div className="flex items-center justify-end gap-1">
+                        <button
+                          onClick={(e) => { e.stopPropagation(); setRemovingProfile(p); }}
+                          className="p-1.5 rounded-lg text-slate-300 hover:bg-slate-100 hover:text-slate-700 transition-colors"
+                          title={p.archived ? 'Pulihkan atau padam profil' : 'Arkib atau padam profil'}
+                        >
+                          <UserMinus size={15} />
+                        </button>
+                        <ChevronRight size={16} className="text-slate-300 group-hover:text-blue-600 group-hover:translate-x-0.5 transition-all" />
+                      </div>
                     </td>
                   </tr>
                 );
@@ -313,6 +395,25 @@ export function AdminView({ rooms, equipment, assets, localBookings }: Props) {
           </table>
         </div>
       </div>
+
+      <RemoveProfileModal
+        open={removingProfile !== null}
+        profile={removingProfile}
+        stats={
+          removingProfile
+            ? {
+                totalBookings: bookings.filter(
+                  (b) => b.userId === removingProfile.id && b.status !== 'cancelled',
+                ).length,
+                openLoans: openLoansByUser.get(removingProfile.id) ?? 0,
+              }
+            : null
+        }
+        actor={currentProfile}
+        onClose={() => setRemovingProfile(null)}
+        onArchive={archiveProfile}
+        onDelete={deleteProfile}
+      />
 
       <AnimatePresence>
         {selectedProfile && (

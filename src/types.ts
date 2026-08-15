@@ -12,6 +12,14 @@ export interface Profile {
   bio?: string;
   joinedAt: number;
   lastActiveAt: number;
+  /** Staff who have left the school. Archived profiles vanish from the
+   *  leaderboard, reports and the "Profil Sedia Ada" picker, but the row
+   *  survives so their portfolio and booking history stay intact — and an
+   *  admin can restore them in one click. Permanent removal is a separate,
+   *  harder-guarded action. */
+  archived?: boolean;
+  archivedAt?: number;
+  archivedBy?: string;
 }
 
 export interface Asset {

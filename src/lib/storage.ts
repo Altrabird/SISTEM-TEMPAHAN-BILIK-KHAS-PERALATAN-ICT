@@ -584,35 +584,8 @@ export async function updateNotificationSettings(
   return { ok: true };
 }
 
-export async function fetchProfileById(id: string): Promise<Profile | null> {
-  if (!isSupabaseEnabled || !supabase) return null;
-  const { data, error } = await supabase
-    .from('profiles')
-    .select('*')
-    .eq('id', id)
-    .maybeSingle();
-  if (error || !data) return null;
+function rowToProfile(row: any): Profile {
   return {
-    id: data.id,
-    name: data.name,
-    email: data.email ?? undefined,
-    role: data.role,
-    department: data.department ?? undefined,
-    avatarUrl: data.avatar_url ?? undefined,
-    bio: data.bio ?? undefined,
-    joinedAt: new Date(data.joined_at).getTime(),
-    lastActiveAt: new Date(data.last_active_at).getTime(),
-  };
-}
-
-export async function fetchProfilesFromCloud(): Promise<Profile[] | null> {
-  if (!isSupabaseEnabled || !supabase) return null;
-  const { data, error } = await supabase
-    .from('profiles')
-    .select('*')
-    .order('last_active_at', { ascending: false });
-  if (error || !data) return null;
-  return data.map((row: any) => ({
     id: row.id,
     name: row.name,
     email: row.email ?? undefined,
@@ -622,7 +595,107 @@ export async function fetchProfilesFromCloud(): Promise<Profile[] | null> {
     bio: row.bio ?? undefined,
     joinedAt: new Date(row.joined_at).getTime(),
     lastActiveAt: new Date(row.last_active_at).getTime(),
-  }));
+    archived: row.archived ?? false,
+    archivedAt: row.archived_at ? new Date(row.archived_at).getTime() : undefined,
+    archivedBy: row.archived_by ?? undefined,
+  };
+}
+
+export async function fetchProfileById(id: string): Promise<Profile | null> {
+  if (!isSupabaseEnabled || !supabase) return null;
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('*')
+    .eq('id', id)
+    .maybeSingle();
+  if (error || !data) return null;
+  return rowToProfile(data);
+}
+
+/**
+ * All profiles, newest-active first.
+ *
+ * Archived staff are excluded by default — that's what makes them vanish
+ * from the "Profil Sedia Ada" picker and the reports at every call site
+ * without each one needing to remember. Only the admin leaderboard passes
+ * `includeArchived`, so it can offer a "show archived" toggle.
+ */
+export async function fetchProfilesFromCloud(
+  includeArchived = false,
+): Promise<Profile[] | null> {
+  if (!isSupabaseEnabled || !supabase) return null;
+  let query = supabase.from('profiles').select('*');
+  if (!includeArchived) {
+    // `is('archived', false)` alone would drop rows where the column is
+    // still NULL on a database that hasn't run the v1.9.5 migration.
+    query = query.or('archived.is.null,archived.eq.false');
+  }
+  const { data, error } = await query.order('last_active_at', { ascending: false });
+  if (error || !data) return null;
+  return data.map(rowToProfile);
+}
+
+/**
+ * Archive or restore a profile (soft removal).
+ *
+ * Uses `.update().eq().select()` rather than upsert so 0 affected rows
+ * surfaces as an error instead of a silent no-op — the same trap that bit
+ * the resource editor before.
+ */
+export async function setProfileArchived(
+  profileId: string,
+  archived: boolean,
+  byName?: string,
+): Promise<{ ok: boolean; error?: string }> {
+  if (!isSupabaseEnabled || !supabase) {
+    return { ok: false, error: 'Supabase belum dikonfig.' };
+  }
+  const { data, error } = await supabase
+    .from('profiles')
+    .update({
+      archived,
+      archived_at: archived ? new Date().toISOString() : null,
+      archived_by: archived ? (byName ?? null) : null,
+    })
+    .eq('id', profileId)
+    .select();
+  if (error) return { ok: false, error: error.message };
+  if (!data || data.length === 0) {
+    return {
+      ok: false,
+      error: 'Tiada baris dikemaskini — jalankan supabase/schema.sql dahulu (kolum archived).',
+    };
+  }
+  return { ok: true };
+}
+
+/**
+ * Permanently delete a profile row.
+ *
+ * Booking history is deliberately NOT touched: `bookings.user_id` has no
+ * foreign key to `profiles`, and every booking carries a denormalised
+ * `user_name`, so past records and reports stay complete after the person
+ * is gone. Callers must block this when the user still holds an open loan.
+ */
+export async function deleteProfileFromCloud(
+  profileId: string,
+): Promise<{ ok: boolean; error?: string }> {
+  if (!isSupabaseEnabled || !supabase) {
+    return { ok: false, error: 'Supabase belum dikonfig.' };
+  }
+  const { data, error } = await supabase
+    .from('profiles')
+    .delete()
+    .eq('id', profileId)
+    .select();
+  if (error) return { ok: false, error: error.message };
+  if (!data || data.length === 0) {
+    return {
+      ok: false,
+      error: 'Tiada baris dipadam — polisi DELETE mungkin belum dipasang (jalankan supabase/schema.sql).',
+    };
+  }
+  return { ok: true };
 }
 
 /** Postgres `time` columns come back as HH:MM:SS — trim the seconds so

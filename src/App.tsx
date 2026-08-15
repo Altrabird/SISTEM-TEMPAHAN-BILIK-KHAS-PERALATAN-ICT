@@ -1012,6 +1012,7 @@ export default function App() {
                   equipment={equipment}
                   assets={assets}
                   localBookings={bookings}
+                  currentProfile={profile}
                 />
               )}
               {activeView === 'reports' && isAdmin && (

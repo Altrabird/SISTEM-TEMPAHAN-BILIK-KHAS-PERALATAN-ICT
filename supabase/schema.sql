@@ -16,7 +16,16 @@ create table if not exists public.profiles (
   last_active_at timestamptz not null default now()
 );
 
-create index if not exists profiles_role_idx on public.profiles (role);
+-- v1.9.5: staff who have left the school. Archived profiles disappear from
+-- the leaderboard, reports and the "Profil Sedia Ada" picker, but the row
+-- (and therefore the portfolio + achievements) survives and can be
+-- restored. Distinct from a permanent delete, which drops the row.
+alter table public.profiles add column if not exists archived     boolean not null default false;
+alter table public.profiles add column if not exists archived_at  timestamptz;
+alter table public.profiles add column if not exists archived_by  text;
+
+create index if not exists profiles_role_idx     on public.profiles (role);
+create index if not exists profiles_archived_idx on public.profiles (archived);
 
 -- =========================================================================
 -- 2. ROOMS
@@ -130,6 +139,7 @@ drop policy if exists "read all assets"    on public.assets;
 drop policy if exists "read all bookings"  on public.bookings;
 drop policy if exists "insert profiles"    on public.profiles;
 drop policy if exists "update profiles"    on public.profiles;
+drop policy if exists "delete profiles"    on public.profiles;
 drop policy if exists "insert bookings"    on public.bookings;
 drop policy if exists "update bookings"    on public.bookings;
 drop policy if exists "insert assets"      on public.assets;
@@ -147,6 +157,13 @@ create policy "read all bookings"  on public.bookings  for select using (true);
 -- Open write for everyone (anon key). Tighten with auth.uid() once you add Supabase Auth.
 create policy "insert profiles"  on public.profiles  for insert with check (true);
 create policy "update profiles"  on public.profiles  for update using (true);
+
+-- v1.9.5: permanent profile removal. Without this policy the delete is
+-- silently filtered to 0 rows and the admin sees a button that does
+-- nothing. `bookings.user_id` has NO foreign key here by design, so
+-- deleting a profile never cascades into booking history — past rows keep
+-- their denormalised `user_name` and reports stay accurate.
+create policy "delete profiles"  on public.profiles  for delete using (true);
 
 create policy "insert bookings"  on public.bookings  for insert with check (true);
 create policy "update bookings"  on public.bookings  for update using (true);

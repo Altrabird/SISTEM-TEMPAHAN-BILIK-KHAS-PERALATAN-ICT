@@ -142,7 +142,7 @@ scripts/
 
 | Table | Key columns | Notes |
 |-------|-------------|-------|
-| `profiles` | id, name, role, department, email, avatar_url, joined_at, last_active_at | role: guru/admin/pelajar/staf |
+| `profiles` | id, name, role, department, email, avatar_url, joined_at, last_active_at, **archived**, archived_at, archived_by | role: guru/admin/pelajar/staf. v1.9.5 adds RLS DELETE policy + archive flag |
 | `rooms` | id, name, capacity, image_url, description, locked_reason, **hidden** | RLS: SELECT/INSERT/UPDATE/DELETE all open |
 | `equipment` | id, name, quantity, image_url, description, locked_reason, **hidden** | category-level; same RLS as rooms |
 | `assets` | id, resource_id→equipment, name, serial_number, specifications, image_url, status, locked_reason, **hidden** | individual units |
@@ -296,7 +296,7 @@ certbot --nginx -d tempah.altrabird.click
 
 ---
 
-## 10. What's done (v1.9.4)
+## 10. What's done (v1.9.5)
 
 ### Core booking flows
 - ✅ Bilik Khas booking with time-slot conflict detection
@@ -336,6 +336,12 @@ certbot --nginx -d tempah.altrabird.click
 
 ### Admin views
 - ✅ Pentadbir leaderboard with per-user drill-down to PortfolioView
+- ✅ **v1.9.5** Staff offboarding — Arkib (reversible; hides from
+  leaderboard, reports and "Profil Sedia Ada", keeps portfolio) or Padam
+  Kekal (permanent, type-to-confirm). Guards: can't remove your own
+  profile; an open ICT loan blocks permanent delete so a unit on loan
+  never loses its owner. `bookings.user_id` has no FK, so booking
+  history and reports survive a delete intact
 - ✅ Pinjaman ICT view (all loans, filters: Aktif / Lewat / Pulang)
 - ✅ Reports — KPIs, trend chart, top users/resources, printable A4
 - ✅ Tetapan — profile editor, reset, backend status, **v1.9.4**
