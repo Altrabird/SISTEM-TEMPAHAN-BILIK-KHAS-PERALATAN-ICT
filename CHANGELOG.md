@@ -28,6 +28,38 @@ dan setiap tempahan menyimpan `user_name` secara denormalised. Jadi
 memadam profil tidak pernah cascade ke rekod tempahan — arkib dan
 laporan kekal lengkap walaupun orangnya sudah tiada.
 
+### Guru yang diarkibkan tidak boleh menempah
+
+Menyembunyikan profil sahaja tidak mencukupi. Guru yang sudah membuka PWA
+menyimpan profil dalam localStorage — tab itu masih boleh menghantar
+tempahan walaupun sudah diarkibkan. Sekatan dipasang di **dua lapisan**:
+
+**1. Trigger pangkalan data (autoritatif).**
+`enforce_active_profile_on_booking()` — `before insert on bookings`.
+Berkuat kuasa untuk app, ketiga-tiga bulk RPC, dan SQL terus.
+
+- **INSERT sahaja.** Guru diarkibkan mesti masih boleh *memulangkan* atau
+  *membatalkan* pinjaman sedia ada (kedua-duanya UPDATE) — kalau tidak,
+  mengarkibkan seseorang akan mengunci peralatan yang masih dipegangnya.
+- **Fail OPEN bila baris profil tiada.** Upsert profil pengguna baharu
+  berlumba dengan tempahan pertama mereka; menolak atas alasan "tiada
+  baris profil" akan menolak tempahan sah secara rawak. Tiada baris =
+  dibenarkan, `archived = true` = disekat.
+
+**2. Skrin sekatan dalam app (mesra pengguna).**
+`fetchProfileStatus()` disemak semasa load dan setiap kali tab difokus
+semula. Jika diarkib/dipadam → skrin penuh "Profil Telah Diarkibkan"
+dengan butang Tukar Profil. Tiada borang tempahan yang boleh dicapai.
+
+Semakan itu memulangkan `null` bila jawapannya benar-benar tidak
+diketahui (offline / permintaan gagal) dan app **tidak** membuat apa-apa
+— mengunci guru keluar kerana sambungan terputus jauh lebih buruk
+daripada membiarkan sesi basi beberapa minit lagi.
+
+Kesan sampingan penting: `syncProfileToCloud` ialah **upsert**, jadi
+profil yang dipadam akan *hidup semula* sebaik sahaja tab lama menyentuh
+`lastActiveAt`. Sync kini dilangkau sepenuhnya apabila akses ditarik.
+
 ### Tiga pengawal
 
 1. **Tidak boleh buang profil sendiri** — admin akan terkunci keluar

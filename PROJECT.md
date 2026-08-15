@@ -342,6 +342,12 @@ certbot --nginx -d tempah.altrabird.click
   profile; an open ICT loan blocks permanent delete so a unit on loan
   never loses its owner. `bookings.user_id` has no FK, so booking
   history and reports survive a delete intact
+- ✅ **v1.9.5** Archived staff cannot book — enforced by the
+  `trg_enforce_active_profile` BEFORE INSERT trigger on `bookings` (covers
+  app, bulk RPCs and direct SQL), plus an in-app "Profil Telah
+  Diarkibkan" screen checked on load and tab focus. INSERT only, so they
+  can still return/cancel a loan they are holding; fails open on a
+  missing profile row so a new user's first booking is never refused
 - ✅ Pinjaman ICT view (all loans, filters: Aktif / Lewat / Pulang)
 - ✅ Reports — KPIs, trend chart, top users/resources, printable A4
 - ✅ Tetapan — profile editor, reset, backend status, **v1.9.4**

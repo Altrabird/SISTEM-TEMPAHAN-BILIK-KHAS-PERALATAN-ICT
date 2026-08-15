@@ -175,6 +175,52 @@ create policy "update rooms"     on public.rooms     for update using (true);
 create policy "update equipment" on public.equipment for update using (true);
 
 -- =========================================================================
+-- 6b. ARCHIVED STAFF CANNOT BOOK (v1.9.5)
+--
+-- The app hides booking UI from archived users, but that check lives in
+-- the client: a teacher who already had the PWA open keeps a cached
+-- profile in localStorage, and nothing stopped that tab from inserting.
+-- This trigger is the authoritative rule — it applies to the app, the
+-- bulk RPCs, and direct SQL alike.
+--
+-- Deliberately fails OPEN when the profile row is missing rather than
+-- archived. A brand-new user's profile upsert and their first booking
+-- insert race each other; rejecting on "no profile row" would randomly
+-- refuse a legitimate first booking. Missing = allowed, archived = blocked.
+--
+-- INSERT only. Archived staff must still be able to return or cancel an
+-- outstanding loan (both are UPDATEs) — otherwise archiving someone would
+-- strand the equipment they are holding.
+-- =========================================================================
+create or replace function public.enforce_active_profile_on_booking()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  is_archived boolean;
+begin
+  select archived into is_archived from public.profiles where id = new.user_id;
+
+  if is_archived is true then
+    raise exception
+      'PROFIL_DIARKIB: Profil "%" telah diarkibkan oleh pentadbir dan tidak boleh membuat tempahan baharu.',
+      new.user_name
+      using errcode = 'check_violation';
+  end if;
+
+  return new;
+end;
+$$;
+
+drop trigger if exists trg_enforce_active_profile on public.bookings;
+create trigger trg_enforce_active_profile
+before insert on public.bookings
+for each row
+execute function public.enforce_active_profile_on_booking();
+
+-- =========================================================================
 -- 7. SERVER CLOCK
 -- Authoritative time source for the in-app live clock. A device whose
 -- clock has drifted (or was set by hand) would otherwise show a time

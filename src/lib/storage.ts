@@ -601,6 +601,31 @@ function rowToProfile(row: any): Profile {
   };
 }
 
+/**
+ * Lightweight liveness check for the signed-in profile.
+ *
+ * Distinct from `fetchProfileById`, which returns null for BOTH "row not
+ * found" and "request failed" — a distinction that matters here, because
+ * locking a teacher out of the app on a flaky connection would be far
+ * worse than letting a stale session linger a few more minutes.
+ *
+ * Returns `null` when the answer is genuinely unknown (Supabase off, or
+ * the request errored). Callers must treat null as "carry on".
+ */
+export async function fetchProfileStatus(
+  id: string,
+): Promise<{ exists: boolean; archived: boolean } | null> {
+  if (!isSupabaseEnabled || !supabase) return null;
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('id, archived')
+    .eq('id', id)
+    .maybeSingle();
+  if (error) return null;
+  if (!data) return { exists: false, archived: false };
+  return { exists: true, archived: data.archived === true };
+}
+
 export async function fetchProfileById(id: string): Promise<Profile | null> {
   if (!isSupabaseEnabled || !supabase) return null;
   const { data, error } = await supabase

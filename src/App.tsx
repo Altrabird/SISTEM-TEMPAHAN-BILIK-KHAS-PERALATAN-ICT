@@ -25,6 +25,7 @@ import {
   insertResourceInCloud,
   deleteResourceInCloud,
   sendLoanPasswordEmail,
+  fetchProfileStatus,
 } from './lib/storage';
 import { isAssetLocked, isResourceLocked, lockReasonOf } from './lib/locks';
 import { visibleFor } from './lib/visibility';
@@ -72,6 +73,10 @@ export default function App() {
 
   const [profile, setProfile] = useState<Profile | null>(null);
   const [profileLoaded, setProfileLoaded] = useState(false);
+  /** Set when the signed-in profile has been archived (or removed) by an
+   *  admin while this session was open. Blocks the whole app rather than
+   *  letting the user reach a booking form the DB trigger will reject. */
+  const [accessRevoked, setAccessRevoked] = useState<'archived' | 'deleted' | null>(null);
 
   const [rooms, setRooms] = useState<Resource[]>([]);
   const [equipment, setEquipment] = useState<Resource[]>([]);
@@ -180,9 +185,46 @@ export default function App() {
   useEffect(() => {
     if (profile) {
       localStore.saveProfile(profile);
-      void syncProfileToCloud(profile);
+      // Never re-upsert once access is revoked: `syncProfileToCloud` is an
+      // upsert, so a deleted profile would resurrect itself the moment this
+      // tab touched `lastActiveAt`.
+      if (!accessRevoked) void syncProfileToCloud(profile);
     }
-  }, [profile]);
+  }, [profile, accessRevoked]);
+
+  /**
+   * Watch for an admin archiving (or deleting) this profile mid-session.
+   *
+   * Checked on load and whenever the tab regains focus — an archived
+   * teacher who leaves the PWA open would otherwise keep a usable booking
+   * form on screen until the next reload. `fetchProfileStatus` returns
+   * null when it genuinely cannot tell (offline, request failed), and we
+   * deliberately do nothing in that case rather than lock someone out of
+   * an internal tool over a dropped connection.
+   */
+  useEffect(() => {
+    const id = profile?.id;
+    if (!id || !isSupabaseEnabled) return;
+    let alive = true;
+
+    const check = async () => {
+      const status = await fetchProfileStatus(id);
+      if (!alive || !status) return;
+      if (status.archived) setAccessRevoked('archived');
+      else if (!status.exists) setAccessRevoked('deleted');
+      else setAccessRevoked(null); // restored by admin — let them straight back in
+    };
+
+    void check();
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') void check();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      alive = false;
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, [profile?.id]);
 
   const updateLastActive = () => {
     if (profile) setProfile({ ...profile, lastActiveAt: Date.now() });
@@ -740,6 +782,24 @@ export default function App() {
   const closeSidebar = () => setIsSidebarOpen(false);
 
   if (!profileLoaded) return null;
+
+  // An admin archived/removed this profile — stop before any booking UI.
+  // The DB trigger would reject the insert anyway; this turns a confusing
+  // failure into a clear explanation.
+  if (profile && accessRevoked) {
+    return (
+      <AccessRevokedScreen
+        profile={profile}
+        reason={accessRevoked}
+        onSwitchProfile={() => {
+          localStore.clearProfile();
+          setProfile(null);
+          setAccessRevoked(null);
+          setActiveView('dashboard');
+        }}
+      />
+    );
+  }
 
   return (
     <div className="flex h-screen bg-slate-50 text-slate-900 font-sans overflow-hidden">
@@ -1348,6 +1408,52 @@ export default function App() {
           </div>
         </nav>
       )}
+    </div>
+  );
+}
+
+/**
+ * Full-screen block for a profile that has been archived or removed.
+ *
+ * Deliberately not a dismissible modal: the point is that this session
+ * can no longer book anything, and the DB trigger will refuse the insert
+ * regardless. The only way forward is picking a different profile.
+ */
+function AccessRevokedScreen({
+  profile, reason, onSwitchProfile,
+}: {
+  profile: Profile;
+  reason: 'archived' | 'deleted';
+  onSwitchProfile: () => void;
+}) {
+  const archived = reason === 'archived';
+  return (
+    <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
+      <div className="max-w-lg w-full bg-white rounded-3xl border border-slate-200 p-8 sm:p-10 text-center shadow-sm">
+        <div className="w-16 h-16 mx-auto rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center mb-5">
+          <Shield size={32} />
+        </div>
+        <h1 className="text-xl font-bold text-slate-800">
+          {archived ? 'Profil Telah Diarkibkan' : 'Profil Tidak Ditemui'}
+        </h1>
+        <p className="text-sm text-slate-500 mt-3 leading-relaxed">
+          Profil <strong className="text-slate-700">{profile.name}</strong>{' '}
+          {archived
+            ? 'telah diarkibkan oleh pentadbir. Tempahan bilik dan pinjaman ICT baharu tidak lagi dibenarkan untuk profil ini.'
+            : 'sudah tiada dalam sistem. Ia mungkin telah dipadam oleh pentadbir.'}
+        </p>
+        <p className="text-xs text-slate-400 mt-4 leading-relaxed">
+          Rekod tempahan lampau anda kekal dalam sistem. Jika ini satu
+          kesilapan, sila hubungi pentadbir ICT sekolah untuk memulihkan
+          profil anda.
+        </p>
+        <button
+          onClick={onSwitchProfile}
+          className="mt-7 w-full sm:w-auto bg-blue-600 text-white px-6 py-2.5 rounded-lg text-xs font-bold uppercase tracking-widest hover:bg-blue-700 transition-all shadow-md shadow-blue-500/20 active:scale-95 inline-flex items-center justify-center gap-2"
+        >
+          <LogOut size={14} /> Tukar Profil
+        </button>
+      </div>
     </div>
   );
 }
