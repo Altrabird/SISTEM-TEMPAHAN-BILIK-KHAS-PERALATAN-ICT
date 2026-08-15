@@ -63,6 +63,8 @@ src/
 │   ├── locks.ts               isResourceLocked, isAssetLocked, lockReasonOf
 │   ├── visibility.ts          visibleFor(items, isAdmin), isHiddenFromUser
 │   ├── dates.ts               todayLocalISO, addDaysLocalISO, daysBetween
+│   ├── serverTime.ts          v1.9.4 — internet-synced clock: syncClock,
+│   │                          serverNow, kualaLumpurISODow (device-drift safe)
 │   ├── resources.ts           resolveResourceName — id → "Asset (Category)" / room / fallback
 │   └── qr.ts                  loanUrl, bookUrl, generateQrDataUrl, openBulkQrSticker
 │
@@ -85,6 +87,11 @@ src/
     ├── BulkAssetActionsModal.tsx  Admin: lock/status/delete in bulk
     ├── ReturnLoanModal.tsx     Mark loan as returned + condition notes
     ├── BulkReturnModal.tsx     Confirm batch return + shared notes
+    ├── CancelBookingModal.tsx  v1.9.4 — cancel booking/loan; reason REQUIRED
+    │                           when an admin cancels someone else's row
+    ├── NotificationSettingsCard.tsx  v1.9.4 — admin editor for the Telegram
+    │                           rules (master switch, hari aktif, per-event)
+    ├── LiveClock.tsx           v1.9.4 — header clock on internet-synced time
     ├── AssetListModal.tsx      Asset grid for a category (+ eye toggle on each unit)
     ├── AddAssetModal.tsx       Admin: register new unit (within existing category, + Nota Akses)
     ├── AddResourceModal.tsx    Admin: register NEW room or equipment category
@@ -140,6 +147,7 @@ scripts/
 | `equipment` | id, name, quantity, image_url, description, locked_reason, **hidden** | category-level; same RLS as rooms |
 | `assets` | id, resource_id→equipment, name, serial_number, specifications, image_url, status, locked_reason, **hidden** | individual units |
 | `bookings` | id, resource_id, resource_type, user_id, user_name, date, return_date, start_time, end_time, purpose, status, created_at, returned_at, returned_by_id, returned_by_name, return_notes, cancel_* | status: pending/confirmed/cancelled/returned |
+| `notification_settings` | id (always `'telegram'`), enabled, active_days (smallint[] ISO dow), notify_new_booking, notify_return, notify_cancel, notify_daily_reminder, notify_morning_digest, updated_at/by | v1.9.4 — single row. Read by `tg_should_send()` inside Postgres, so the toggles bind every path (app, direct SQL, cron) |
 
 **RLS**: open read + write everywhere (anon key). Internal school tool;
 fine. For public deploy → switch to `auth.uid()` policies.
@@ -288,7 +296,7 @@ certbot --nginx -d tempah.altrabird.click
 
 ---
 
-## 10. What's done (v1.9.3)
+## 10. What's done (v1.9.4)
 
 ### Core booking flows
 - ✅ Bilik Khas booking with time-slot conflict detection
@@ -320,14 +328,18 @@ certbot --nginx -d tempah.altrabird.click
 - ✅ Admin return on behalf of any borrower
 - ✅ Bulk return — checkbox-select multiple → one Telegram digest
 - ✅ Self-service cancel (own booking)
-- ✅ Admin cancel any booking with optional reason
+- ✅ Admin cancel any booking or ICT loan — **v1.9.4**: proper
+  `CancelBookingModal` (no more `prompt()`), reason **wajib** when the
+  row belongs to someone else, plus a "Batal" action on every active row
+  in the admin Pinjaman ICT table
 - ✅ Audit columns: returned_at/by + cancelled_at/by + reasons
 
 ### Admin views
 - ✅ Pentadbir leaderboard with per-user drill-down to PortfolioView
 - ✅ Pinjaman ICT view (all loans, filters: Aktif / Lewat / Pulang)
 - ✅ Reports — KPIs, trend chart, top users/resources, printable A4
-- ✅ Tetapan — profile editor, reset, backend status
+- ✅ Tetapan — profile editor, reset, backend status, **v1.9.4**
+  Telegram notification control (suis induk + hari aktif + jenis mesej)
 
 ### QR scan-driven flows (new v1.7)
 - ✅ In-app QR scanner — html5-qrcode camera + manual-entry fallback
@@ -359,6 +371,12 @@ certbot --nginx -d tempah.altrabird.click
   splash, sidebar chip, onboarding panel — all from one source
 - ✅ Dashboard "Tempahan Hari Ini" shows return status pill + summary
   (Pulang TEPAT / AWAL X / LEWAT X hari) for returned loans
+- ✅ **v1.9.4** Live clock in the header — internet-synced, not the raw
+  device clock. Offset measured once against `server_now()` (fallback:
+  origin `Date` header), then ticked locally; re-synced on tab focus /
+  reconnect. Rendered in Asia/Kuala_Lumpur so a laptop on the wrong
+  timezone still shows school time. Green dot = synced, amber = device
+  clock only
 
 ### Telegram notifications (8 paths)
 - ✅ Instant: booking INSERT (rooms + ICT loans)
@@ -382,6 +400,35 @@ certbot --nginx -d tempah.altrabird.click
 Bot token + chat_id in Supabase Vault. Triggers live in DB so they
 fire for any source (app, direct SQL, future clients). Failures are
 logged but never block a booking save.
+
+**v1.9.4 — admin gate on every path.** `tg_send(message, event_key)`
+now calls `tg_should_send(event_key)` first, which reads the
+`notification_settings` row: master switch → active day (ISO dow in
+Asia/Kuala_Lumpur, default Isnin–Jumaat) → per-event toggle. Because
+the gate sits inside `tg_send`, it covers the triggers, the three bulk
+RPCs, and both cron jobs without touching them individually. Key
+properties:
+
+- Muting affects **only the Telegram message** — the booking, return
+  and cancel writes all still happen normally on a weekend.
+- The crons still fire daily; the message is dropped at send time.
+- Fails **open**: a missing settings row means "send", so a half-run
+  migration can't silently kill notifications.
+- `tg_send(msg, 'manual')` bypasses the gate — use it for smoke tests
+  on a muted day.
+- Legacy callers passing one argument land on `event_key = 'other'`
+  (master + day check, no per-event toggle).
+
+**`bulk_book_rooms` was missing from the repo until v1.9.4.** It shipped
+in v1.9 but was only ever created directly in the deployed database, so
+`supabase/notify_setup.sql` did not contain it — a rebuild from
+`supabase/` alone produced a system where the BookingModal "Julat Hari"
+/ "Pukal" modes failed at runtime with *function does not exist*. It has
+now been recovered from production via `pg_get_functiondef` and
+committed. **Lesson: never create a DB function straight in the SQL
+Editor — write it into `notify_setup.sql` / `schema.sql` first, then run
+that file.** Anything created only in the dashboard is invisible to
+every later migration that re-runs the file.
 
 ### Backend + ops
 - ✅ Supabase as source of truth (rooms, equipment, assets, bookings, profiles)

@@ -4,6 +4,7 @@ import { Profile } from '../types';
 import { ROLE_LABELS } from '../constants';
 import { isSupabaseEnabled } from '../lib/supabase';
 import { TelegramJoinPill } from '../components/TelegramJoinPill';
+import { NotificationSettingsCard } from '../components/NotificationSettingsCard';
 
 interface Props {
   profile: Profile | null;
@@ -155,6 +156,8 @@ export function SettingsView({ profile, onReset, onSaveProfile, onSwitchProfile 
         </p>
       </div>
 
+      <NotificationSettingsCard profile={profile} />
+
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-8 space-y-4">
         <h3 className="text-[10px] font-bold uppercase tracking-widest text-slate-400 flex items-center gap-2">
           <Database size={12} /> Backend
@@ -204,7 +207,7 @@ export function SettingsView({ profile, onReset, onSaveProfile, onSwitchProfile 
       <div className="grid grid-cols-2 gap-4">
         <div className="p-4 bg-white border border-slate-200 rounded-xl">
           <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Versi Stabil</p>
-          <p className="text-sm font-bold text-slate-700">v1.9.3</p>
+          <p className="text-sm font-bold text-slate-700">v1.9.4</p>
         </div>
         <div className="p-4 bg-white border border-slate-200 rounded-xl">
           <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Tahun Aktif</p>

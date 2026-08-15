@@ -10,6 +10,11 @@
 --   1. After-INSERT trigger on bookings → instant Telegram message
 --   2. Daily cron at 08:00 MY → digest of overdue + due-tomorrow loans
 --
+-- v1.9.4: every send now passes through `tg_should_send(event_key)`, which
+-- reads the admin-editable `public.notification_settings` row. Default is
+-- working days only (Isnin–Jumaat, Asia/Kuala_Lumpur). Weekend bookings
+-- still save normally — only the Telegram message is suppressed.
+--
 -- BEFORE running, replace the placeholder secrets near the top with your
 -- own bot token and chat_id.
 -- =============================================================================
@@ -19,20 +24,33 @@ create extension if not exists pg_cron with schema extensions;
 
 -- ---------------------------------------------------------------------------
 -- 1. Store secrets in Vault (replace placeholders below)
+--
+--     SAFETY: while the values below are still the placeholders, this
+--     block does NOTHING. Re-running this file to pick up a later change
+--     (as you're meant to — it's idempotent) must never clobber working
+--     Vault secrets with 'REPLACE_WITH_YOUR_...', which would silently
+--     break every notification: tg_send would happily POST to
+--     api.telegram.org/botREPLACE_WITH_YOUR_BOT_TOKEN and fail.
+--
+--     To seed or rotate the secrets, paste the real values below and run.
 -- ---------------------------------------------------------------------------
 do $$
 declare
   bot_token_value text := 'REPLACE_WITH_YOUR_BOT_TOKEN';
   chat_id_value   text := 'REPLACE_WITH_YOUR_CHAT_ID';   -- group ids are negative
 begin
-  if exists (select 1 from vault.decrypted_secrets where name = 'tg_bot_token') then
+  if bot_token_value = 'REPLACE_WITH_YOUR_BOT_TOKEN' then
+    raise notice 'tg_bot_token: placeholder unchanged — existing Vault secret left alone';
+  elsif exists (select 1 from vault.decrypted_secrets where name = 'tg_bot_token') then
     update vault.secrets set secret = bot_token_value
       where id = (select id from vault.decrypted_secrets where name = 'tg_bot_token' limit 1);
   else
     perform vault.create_secret(bot_token_value, 'tg_bot_token', 'Telegram bot token');
   end if;
 
-  if exists (select 1 from vault.decrypted_secrets where name = 'tg_chat_id') then
+  if chat_id_value = 'REPLACE_WITH_YOUR_CHAT_ID' then
+    raise notice 'tg_chat_id: placeholder unchanged — existing Vault secret left alone';
+  elsif exists (select 1 from vault.decrypted_secrets where name = 'tg_chat_id') then
     update vault.secrets set secret = chat_id_value
       where id = (select id from vault.decrypted_secrets where name = 'tg_chat_id' limit 1);
   else
@@ -41,9 +59,121 @@ begin
 end $$;
 
 -- ---------------------------------------------------------------------------
--- 2. Helper: send a message to Telegram
+-- 1b. Admin-controlled notification settings (single row, id = 'telegram')
+--
+--     `active_days` holds ISO day-of-week numbers evaluated in
+--     Asia/Kuala_Lumpur: 1 = Isnin … 5 = Jumaat, 6 = Sabtu, 7 = Ahad.
+--     Default {1,2,3,4,5} = hari bekerja sahaja.
 -- ---------------------------------------------------------------------------
-create or replace function public.tg_send(message text)
+create table if not exists public.notification_settings (
+  id                    text primary key default 'telegram'
+                          check (id = 'telegram'),
+  enabled               boolean    not null default true,
+  active_days           smallint[] not null default '{1,2,3,4,5}',
+  notify_new_booking    boolean    not null default true,
+  notify_return         boolean    not null default true,
+  notify_cancel         boolean    not null default true,
+  notify_daily_reminder boolean    not null default true,
+  notify_morning_digest boolean    not null default true,
+  updated_at            timestamptz not null default now(),
+  updated_by            text
+);
+
+-- Defensive alters so re-running this file on an older deployment picks up
+-- any column added later (same pattern as schema.sql).
+alter table public.notification_settings add column if not exists enabled               boolean    not null default true;
+alter table public.notification_settings add column if not exists active_days           smallint[] not null default '{1,2,3,4,5}';
+alter table public.notification_settings add column if not exists notify_new_booking    boolean    not null default true;
+alter table public.notification_settings add column if not exists notify_return         boolean    not null default true;
+alter table public.notification_settings add column if not exists notify_cancel         boolean    not null default true;
+alter table public.notification_settings add column if not exists notify_daily_reminder boolean    not null default true;
+alter table public.notification_settings add column if not exists notify_morning_digest boolean    not null default true;
+alter table public.notification_settings add column if not exists updated_at            timestamptz not null default now();
+alter table public.notification_settings add column if not exists updated_by            text;
+
+insert into public.notification_settings (id) values ('telegram')
+on conflict (id) do nothing;
+
+alter table public.notification_settings enable row level security;
+
+drop policy if exists "read notification settings"   on public.notification_settings;
+drop policy if exists "update notification settings" on public.notification_settings;
+
+-- Same development-friendly posture as the rest of the schema (see
+-- schema.sql §6): open read/update on the anon key. The app itself only
+-- surfaces the editor inside the admin-gated Tetapan view.
+create policy "read notification settings"
+  on public.notification_settings for select using (true);
+create policy "update notification settings"
+  on public.notification_settings for update using (true);
+
+-- ---------------------------------------------------------------------------
+-- 1c. Gate: should we send this event right now?
+--
+--     Returns false when the master switch is off, when today is not an
+--     active day, or when this particular event type is muted. Fails OPEN
+--     (returns true) if the settings row is missing, so a botched migration
+--     never silently kills every notification.
+--
+--     event_key: 'booking_new' | 'loan_return' | 'booking_cancel'
+--                | 'reminder_overdue' | 'digest_morning'
+--                | 'manual'  → bypasses every check (smoke tests)
+--                | 'other'   → master + day check only (legacy callers)
+-- ---------------------------------------------------------------------------
+create or replace function public.tg_should_send(event_key text)
+returns boolean
+language plpgsql
+stable
+security definer
+set search_path = public, extensions
+as $$
+declare
+  s public.notification_settings%rowtype;
+  today_dow smallint;
+begin
+  if event_key = 'manual' then
+    return true;
+  end if;
+
+  select * into s from public.notification_settings where id = 'telegram';
+  if not found then
+    return true;  -- fail open
+  end if;
+
+  if not s.enabled then
+    return false;
+  end if;
+
+  today_dow := extract(isodow from (now() at time zone 'Asia/Kuala_Lumpur'))::smallint;
+  if array_length(s.active_days, 1) is null or not (today_dow = any(s.active_days)) then
+    return false;
+  end if;
+
+  return case event_key
+    when 'booking_new'      then s.notify_new_booking
+    when 'loan_return'      then s.notify_return
+    when 'booking_cancel'   then s.notify_cancel
+    when 'reminder_overdue' then s.notify_daily_reminder
+    when 'digest_morning'   then s.notify_morning_digest
+    else true
+  end;
+end;
+$$;
+
+grant execute on function public.tg_should_send(text) to anon, authenticated;
+
+-- ---------------------------------------------------------------------------
+-- 2. Helper: send a message to Telegram
+--
+--     The old single-argument signature is dropped first: keeping it
+--     alongside the new one (whose second parameter has a default) would
+--     make `tg_send('x')` ambiguous. plpgsql bodies aren't dependency
+--     tracked, so existing callers such as `bulk_book_rooms` keep working
+--     and resolve to the new function with event_key = 'other'.
+-- ---------------------------------------------------------------------------
+drop function if exists public.tg_send(text);
+
+create or replace function public.tg_send(message text, event_key text default 'other')
 returns bigint
 language plpgsql
 security definer
@@ -54,6 +184,10 @@ declare
   chat_id text;
   request_id bigint;
 begin
+  if not public.tg_should_send(event_key) then
+    return null;  -- muted by admin settings (off day / disabled event)
+  end if;
+
   select decrypted_secret into bot_token from vault.decrypted_secrets where name = 'tg_bot_token' limit 1;
   select decrypted_secret into chat_id   from vault.decrypted_secrets where name = 'tg_chat_id'   limit 1;
   if bot_token is null or chat_id is null then
@@ -162,7 +296,7 @@ begin
     || access_line
     || E'\n\n🔗 https://tempah.altrabird.click';
 
-  perform public.tg_send(msg);
+  perform public.tg_send(msg, 'booking_new');
   return new;
 exception when others then
   raise warning 'notify_booking_telegram failed: %', sqlerrm;
@@ -256,7 +390,7 @@ begin
     || coalesce(E'\n📝 Nota: <i>' || new.return_notes || '</i>', '')
     || E'\n\n🔗 https://tempah.altrabird.click';
 
-  perform public.tg_send(msg);
+  perform public.tg_send(msg, 'loan_return');
   return new;
 exception when others then
   raise warning 'notify_return_telegram failed: %', sqlerrm;
@@ -342,7 +476,7 @@ begin
       || coalesce(E'\n\n📝 Nota: <i>' || notes || '</i>', '')
       || E'\n\n🔗 https://tempah.altrabird.click';
 
-  perform public.tg_send(msg);
+  perform public.tg_send(msg, 'loan_return');
   return count_updated;
 end;
 $$;
@@ -456,12 +590,111 @@ begin
       || access_summary
       || E'\n\n🔗 https://tempah.altrabird.click';
 
-  perform public.tg_send(msg);
+  perform public.tg_send(msg, 'booking_new');
   return count_inserted;
 end;
 $$;
 
 grant execute on function public.bulk_loan_assets(jsonb, text, text, date, date, time, time, text, timestamptz) to anon, authenticated;
+
+-- ---------------------------------------------------------------------------
+-- 3b'''. Bulk room booking RPC — insert N room bookings + send ONE digest.
+--        Backs the BookingModal "Julat Hari" and "Pukal" modes. Suppresses
+--        the per-row insert trigger via `tempah.suppress_booking_notify`.
+--
+--        Unlike bulk_loan_assets, every slot carries its own date and time
+--        window, so `rows` is a jsonb array of
+--        { id, resource_id, date, start_time, end_time, created_at }.
+--
+--        Recovered from the deployed database in v1.9.4 — this function
+--        shipped in v1.9 but was never committed, so a rebuild from
+--        supabase/ alone produced a system where bulk room booking failed
+--        at runtime. Kept byte-faithful to production apart from formatting.
+-- ---------------------------------------------------------------------------
+create or replace function public.bulk_book_rooms(
+  rows jsonb,
+  by_user_id text,
+  by_user_name text,
+  purpose text default null
+)
+returns int
+language plpgsql
+security definer
+set search_path = public, extensions
+as $$
+declare
+  count_inserted int := 0;
+  lines text;
+  msg text;
+  total_slots int;
+begin
+  if rows is null or jsonb_array_length(rows) = 0 then
+    return 0;
+  end if;
+
+  perform set_config('tempah.suppress_booking_notify', 'on', true);
+
+  -- Each row provides its own id, resource_id, date, start_time, end_time.
+  -- created_at falls back to now() per row.
+  insert into public.bookings (
+    id, resource_id, resource_type, user_id, user_name,
+    date, start_time, end_time,
+    purpose, status, created_at
+  )
+  select
+    (r->>'id'),
+    (r->>'resource_id'),
+    'room',
+    by_user_id,
+    by_user_name,
+    (r->>'date')::date,
+    (r->>'start_time')::time,
+    (r->>'end_time')::time,
+    purpose,
+    'confirmed',
+    coalesce((r->>'created_at')::timestamptz, now())
+  from jsonb_array_elements(rows) as r;
+  get diagnostics count_inserted = row_count;
+
+  if count_inserted = 0 then
+    return 0;
+  end if;
+
+  total_slots := count_inserted;
+
+  -- Build the per-slot digest (sorted by date, then start_time).
+  -- NB: the inner subquery's `r` (jsonb_array_elements) shadows the outer
+  -- `rooms r` join alias. Postgres resolves it to the innermost scope, which
+  -- is what we want here — left as-is to match the deployed definition.
+  with inserted as (
+    select b.date, b.start_time, b.end_time,
+           coalesce(r.name, b.resource_id) as resource_name
+    from public.bookings b
+    left join public.rooms r on r.id = b.resource_id
+    where b.id in (select r->>'id' from jsonb_array_elements(rows) as r)
+  )
+  select string_agg(
+    '• <b>' || resource_name || '</b>'
+    || E'\n  📅 ' || date::text
+    || '  ⏰ ' || start_time::text || ' – ' || end_time::text,
+    E'\n\n'
+    order by date, start_time
+  )
+  into lines
+  from inserted;
+
+  msg := '🚪🚪 <b>Tempahan Bilik Pukal</b>' || E'\n'
+      || '<i>' || total_slots || ' slot ditempah oleh ' || by_user_name || '</i>' || E'\n'
+      || coalesce(E'📝 <i>' || purpose || '</i>' || E'\n', '')
+      || E'\n' || lines
+      || E'\n\n🔗 https://tempah.altrabird.click';
+
+  perform public.tg_send(msg, 'booking_new');
+  return count_inserted;
+end;
+$$;
+
+grant execute on function public.bulk_book_rooms(jsonb, text, text, text) to anon, authenticated;
 
 -- ---------------------------------------------------------------------------
 -- 3c. Trigger: notify when status transitions INTO 'cancelled'
@@ -522,7 +755,7 @@ begin
     || coalesce(E'\n📝 Sebab: <i>' || new.cancel_reason || '</i>', '')
     || E'\n\n🔗 https://tempah.altrabird.click';
 
-  perform public.tg_send(msg);
+  perform public.tg_send(msg, 'booking_cancel');
   return new;
 exception when others then
   raise warning 'notify_cancel_telegram failed: %', sqlerrm;
@@ -603,11 +836,13 @@ begin
 
   msg := msg || E'\n🔗 https://tempah.altrabird.click';
 
-  perform public.tg_send(msg);
+  perform public.tg_send(msg, 'reminder_overdue');
 end;
 $$;
 
 -- Schedule daily at 00:00 UTC = 08:00 Asia/Kuala_Lumpur
+-- The cron fires every day; `tg_should_send` drops the message on days
+-- the admin has switched off (weekends by default).
 do $$
 begin
   perform cron.unschedule('tempah_remind_overdue_daily');
@@ -703,7 +938,7 @@ begin
 
   msg := msg || E'\n🔗 https://tempah.altrabird.click';
 
-  perform public.tg_send(msg);
+  perform public.tg_send(msg, 'digest_morning');
 end;
 $$;
 
@@ -722,5 +957,15 @@ select cron.schedule(
 -- ---------------------------------------------------------------------------
 -- Manual smoke tests (uncomment to run):
 -- ---------------------------------------------------------------------------
--- select public.tg_send('🧪 Manual test from SQL editor');
+-- Bypasses the settings gate — works even on a muted day:
+-- select public.tg_send('🧪 Manual test from SQL editor', 'manual');
+--
+-- Respects the gate — use this to verify the working-day rule:
+-- select public.tg_should_send('booking_new');
 -- select public.tg_remind_overdue_loans();
+--
+-- Inspect / edit settings by hand (the admin UI writes the same row):
+-- select * from public.notification_settings;
+-- update public.notification_settings
+--    set active_days = '{1,2,3,4,5}'   -- Isnin–Jumaat
+--  where id = 'telegram';

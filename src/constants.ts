@@ -1,4 +1,4 @@
-import { Resource, Asset, Achievement } from './types';
+import { Resource, Asset, Achievement, NotificationSettings, WeekDay } from './types';
 
 export const INITIAL_ROOMS: Resource[] = [
   { id: 'room-1', name: 'Makmal Komputer 1 (bawah)', type: 'room', capacity: 40 },
@@ -102,6 +102,34 @@ export const TELEGRAM_INVITE_URL =
 export const TELEGRAM_GROUP_LABEL =
   (import.meta.env.VITE_TELEGRAM_GROUP_LABEL as string | undefined) ??
   'Tempah@SKBT';
+
+/** Day chips for the notification settings editor, in ISO order so the
+ *  array index maps straight onto `WeekDay`. */
+export const WEEKDAYS: { value: WeekDay; short: string; label: string }[] = [
+  { value: 1, short: 'Isn', label: 'Isnin' },
+  { value: 2, short: 'Sel', label: 'Selasa' },
+  { value: 3, short: 'Rab', label: 'Rabu' },
+  { value: 4, short: 'Kha', label: 'Khamis' },
+  { value: 5, short: 'Jum', label: 'Jumaat' },
+  { value: 6, short: 'Sab', label: 'Sabtu' },
+  { value: 7, short: 'Ahd', label: 'Ahad' },
+];
+
+/** Hari bekerja sekolah — Isnin hingga Jumaat. */
+export const WORKING_DAYS: WeekDay[] = [1, 2, 3, 4, 5];
+
+/** Mirrors the column defaults in `notification_settings`. Used as the
+ *  optimistic value before the first fetch lands, and when Supabase is
+ *  off (local-only mode has no bot to notify anyway). */
+export const DEFAULT_NOTIFICATION_SETTINGS: NotificationSettings = {
+  enabled: true,
+  activeDays: WORKING_DAYS,
+  notifyNewBooking: true,
+  notifyReturn: true,
+  notifyCancel: true,
+  notifyDailyReminder: true,
+  notifyMorningDigest: true,
+};
 
 export const ACHIEVEMENTS: Achievement[] = [
   {

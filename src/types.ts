@@ -73,6 +73,30 @@ export interface Booking {
   cancelReason?: string;
 }
 
+/** ISO day-of-week — 1 = Isnin … 5 = Jumaat, 6 = Sabtu, 7 = Ahad.
+ *  Matches Postgres `extract(isodow ...)` so the array round-trips to
+ *  `notification_settings.active_days` untouched. */
+export type WeekDay = 1 | 2 | 3 | 4 | 5 | 6 | 7;
+
+/** Admin-controlled Telegram notification rules. Stored as a single row
+ *  (`id = 'telegram'`) and enforced server-side by `tg_should_send()` —
+ *  the toggles here are the source of truth for every message the bot
+ *  sends, not just a UI preference. */
+export interface NotificationSettings {
+  /** Master switch. When false, nothing is sent on any day. */
+  enabled: boolean;
+  /** Days on which the bot may post, evaluated in Asia/Kuala_Lumpur.
+   *  Defaults to Isnin–Jumaat (hari bekerja). */
+  activeDays: WeekDay[];
+  notifyNewBooking: boolean;
+  notifyReturn: boolean;
+  notifyCancel: boolean;
+  notifyDailyReminder: boolean;
+  notifyMorningDigest: boolean;
+  updatedAt?: number;
+  updatedBy?: string;
+}
+
 export type AchievementId =
   | 'first_booking'
   | 'five_bookings'

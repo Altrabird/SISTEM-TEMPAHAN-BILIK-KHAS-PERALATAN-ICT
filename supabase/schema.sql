@@ -158,7 +158,22 @@ create policy "update rooms"     on public.rooms     for update using (true);
 create policy "update equipment" on public.equipment for update using (true);
 
 -- =========================================================================
--- 7. SEED DATA (optional — matches src/constants.ts)
+-- 7. SERVER CLOCK
+-- Authoritative time source for the in-app live clock. A device whose
+-- clock has drifted (or was set by hand) would otherwise show a time
+-- that disagrees with the booking timestamps Postgres writes. The app
+-- calls this once on load, keeps the offset, then ticks locally.
+-- =========================================================================
+create or replace function public.server_now()
+returns timestamptz
+language sql
+stable
+as $$ select now(); $$;
+
+grant execute on function public.server_now() to anon, authenticated;
+
+-- =========================================================================
+-- 8. SEED DATA (optional — matches src/constants.ts)
 -- =========================================================================
 insert into public.rooms (id, name, capacity) values
   ('room-1',  'Makmal Komputer 1 (bawah)', 40),

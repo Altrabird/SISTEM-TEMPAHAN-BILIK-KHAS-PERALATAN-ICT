@@ -2,7 +2,162 @@
 
 Major milestones for the TEMPAH project.
 
-## v1.9.3 — Telegram CTA + universal QR scanning (current)
+## v1.9.4 — Kawalan notifikasi, pembatalan oleh admin, jam masa sebenar (current)
+
+**Tiga kawalan yang selama ini tiada: admin kini boleh menentukan BILA
+bot Telegram dibenarkan bercakap (default hari bekerja sahaja), boleh
+membatalkan tempahan/pinjaman mana-mana pengguna melalui dialog yang
+betul dengan sebab yang direkod, dan setiap skrin menunjukkan jam masa
+sebenar yang diselaraskan dengan internet — bukan jam peranti yang
+selalunya terpesong.**
+
+### 1. Kawalan pemberitahuan Telegram (hari bekerja sahaja)
+
+Sebelum ini bot menghantar 24/7. Tempahan yang dibuat pada malam Sabtu
+tetap membunyikan telefon semua orang dalam grup, dan cron 6:30 pagi
+berjalan pada hujung minggu juga.
+
+Sekarang setiap penghantaran melalui satu pintu:
+
+```
+tg_send(message, event_key) → tg_should_send(event_key)
+   → suis induk?  → hari aktif (ISO dow, Asia/Kuala_Lumpur)?  → jenis mesej?
+```
+
+Kerana pintu itu berada **di dalam** `tg_send`, ia melindungi semua
+laluan sekali gus — 3 trigger, 3 bulk RPC (`bulk_loan_assets`,
+`bulk_return_loans`, `bulk_book_rooms`), dan 2 cron job — tanpa perlu
+menyentuh satu per satu.
+
+| Perkara | Kelakuan |
+|---|---|
+| Default hari aktif | Isnin–Jumaat (`{1,2,3,4,5}`) |
+| Tempahan pada hari senyap | **Tetap disimpan seperti biasa** — hanya mesej Telegram ditahan |
+| Cron 06:30 / 08:00 | Tetap berjalan setiap hari; mesej digugurkan pada hari senyap |
+| Baris tetapan hilang | Fail **terbuka** (hantar) — migrasi separuh jalan tak boleh membunuh notifikasi secara senyap |
+| Ujian manual | `select public.tg_send('test', 'manual')` memintas pintu |
+
+UI: kad **Kawalan Pemberitahuan Telegram** dalam Tetapan (admin) —
+suis induk, 7 cip hari dengan preset "Hari Bekerja" / "Setiap Hari",
+dan 5 toggle jenis mesej (tempahan baharu, pemulangan, pembatalan,
+peringatan harian, ringkasan pagi). Ada baris status langsung:
+*"Hari ini Sabtu — bot tidak akan menghantar apa-apa."*
+
+Nota: hari dinilai dalam zon **Asia/Kuala_Lumpur** di kedua-dua belah
+(Postgres dan UI), jadi peranti yang tersalah zon masa tidak
+menyebabkan pratonton UI bercanggah dengan keputusan sebenar server.
+
+### 2. Pembatalan oleh admin
+
+`prompt()` lama diganti dengan `CancelBookingModal` yang sepadan dengan
+modal lain dalam app. Perbezaan penting yang `prompt()` tak mampu buat:
+
+- **Sebab menjadi wajib** apabila admin membatalkan tempahan milik orang
+  lain (butang submit kekal disabled sehingga diisi). Teks itulah yang
+  muncul dalam mesej Telegram "Dibatalkan oleh … *(admin)*" — jadi
+  pembatalan senyap ke atas tempahan guru lain tidak lagi mungkin.
+- Sebab kekal **pilihan** untuk tempahan sendiri.
+- Cadangan sebab berbeza mengikut konteks (admin: kerosakan,
+  pertindihan, keperluan sekolah / sendiri: aktiviti dibatalkan, tukar
+  tarikh).
+- Ringkasan penuh sebelum sahkan: sumber, tarikh, slot/tempoh, pemohon.
+
+Butang **Batal** juga ditambah pada setiap baris aktif dalam jadual
+**Pinjaman ICT** (paparan admin) — sebelum ini admin hanya boleh
+"Tanda Pulang" di sana, walaupun untuk unit yang tidak pernah diambil.
+Membatal ≠ memulangkan: batal membatalkan rekod, pulang menutupnya
+sebagai selesai.
+
+### 3. Jam masa sebenar (selaras internet)
+
+PC makmal dan laptop sekolah selalu terpesong — ada yang beberapa minit
+tersasar, ada yang jamnya diset dengan tangan. Skrin yang memaparkan
+slot tempahan sehingga ke minit tidak sepatutnya bergantung pada jam
+sedemikian.
+
+`lib/serverTime.ts` mengukur offset sekali:
+
+```
+trueNow ≈ Date.now() + offsetMs
+```
+
+Sumber ikut turutan: `server_now()` RPC (Postgres, hos NTP) → header
+`Date` dari origin sendiri → jam peranti. Round-trip dibahagi dua
+(server menstempel masa di pertengahan permintaan). Koreksi melebihi
+24 jam diabaikan sebagai bacaan tidak munasabah.
+
+`LiveClock` dipaparkan di header — masa + tarikh penuh pada desktop,
+HH:MM padat pada mobile — sentiasa dalam waktu Malaysia. Titik hijau =
+selaras dengan server, kuning = jam peranti sahaja (hover untuk lihat
+berapa saat peranti tersasar). Re-sync automatik apabila tab difokus
+semula atau sambungan pulih; tick tempatan setiap saat antara sync.
+
+### Dua pembetulan yang ditemui semasa deploy
+
+**1. `notify_setup.sql` pernah boleh memadam token bot anda.** Blok
+Vault di bahagian atas fail menulis `bot_token_value` tanpa syarat —
+jadi menjalankan semula fail (yang memang direka untuk dijalankan
+semula) akan menimpa secret yang berfungsi dengan teks
+`REPLACE_WITH_YOUR_BOT_TOKEN`. Kegagalannya senyap: `tg_send` tetap
+menghantar POST ke `api.telegram.org/botREPLACE_WITH_YOUR_BOT_TOKEN`
+dan gagal. Blok itu kini **tidak melakukan apa-apa** selagi
+placeholder belum diganti dengan nilai sebenar.
+
+**2. `bulk_book_rooms` tiada dalam repo.** Fungsi ini dihantar dalam
+v1.9 tetapi dicipta terus dalam SQL Editor — tidak pernah masuk ke
+`notify_setup.sql`. Kesannya berlapis:
+
+- Membina semula pangkalan data daripada `supabase/` sahaja
+  menghasilkan sistem di mana mod "Julat Hari" / "Pukal" gagal dengan
+  *function does not exist*.
+- Menjalankan semula `notify_setup.sql` untuk v1.9.4 tidak menyentuh
+  fungsi itu, jadi ia kekal memanggil `tg_send(msg)` tanpa event key —
+  gate hari tetap berkuat kuasa, tetapi mematikan toggle "Tempahan
+  Baharu" **tidak** akan menyenyapkan tempahan bilik pukal.
+
+Definisi sebenar telah diambil semula dari produksi melalui
+`pg_get_functiondef`, ditampal ke `notify_setup.sql`, dan disahkan
+sepadan bait-demi-bait (selepas normalisasi ruang/komen) dengan versi
+yang sedang berjalan. **Pengajaran: jangan cipta fungsi DB terus dalam
+SQL Editor** — tulis dalam fail dahulu, kemudian jalankan fail itu.
+
+### Files baharu/diubah
+
+- `supabase/notify_setup.sql` — jadual `notification_settings`,
+  `tg_should_send()`, `tg_send(message, event_key)` (signature 1-arg
+  digugurkan dahulu untuk elak ambiguity), semua pemanggil membawa
+  event key, blok Vault kini selamat dijalankan semula, dan
+  `bulk_book_rooms` akhirnya dimasukkan ke dalam repo
+- `supabase/schema.sql` — fungsi `server_now()` (§7)
+- `src/lib/serverTime.ts` — **NEW** jam selaras internet + `kualaLumpurISODow`
+- `src/components/LiveClock.tsx` — **NEW** jam header (2 variant)
+- `src/components/CancelBookingModal.tsx` — **NEW** dialog pembatalan
+- `src/components/NotificationSettingsCard.tsx` — **NEW** editor tetapan admin
+- `src/lib/storage.ts` — `fetchNotificationSettings`, `updateNotificationSettings`
+- `src/types.ts` — `NotificationSettings`, `WeekDay`
+- `src/constants.ts` — `WEEKDAYS`, `WORKING_DAYS`, `DEFAULT_NOTIFICATION_SETTINGS`
+- `src/App.tsx` — state + render `CancelBookingModal`, `LiveClock` di header, `syncClock()` on boot
+- `src/views/BookingsView.tsx` — `onCancel` → `onRequestCancel` (buang `prompt()`)
+- `src/views/ActiveLoansView.tsx` — butang Batal per baris aktif
+- `src/views/SettingsView.tsx` — kad kawalan notifikasi + label v1.9.4
+
+### Langkah deploy (WAJIB)
+
+Jalankan semula kedua-dua fail SQL dalam Supabase SQL Editor — kedua-dua
+idempotent:
+
+1. `supabase/schema.sql` — mencipta `server_now()`
+2. `supabase/notify_setup.sql` — mencipta jadual tetapan + pintu gate
+
+Tanpa langkah 1, jam jatuh ke header `Date` (masih tepat, cuma
+resolusi 1 saat). Tanpa langkah 2, kad Tetapan akan papar ralat
+"jalankan supabase/notify_setup.sql dahulu" dan notifikasi kekal
+seperti sebelum ini (fail-open). Kemudian rebuild + redeploy seperti
+biasa (`/opt/tempah/deploy/deploy.sh`).
+
+---
+
+## v1.9.3 — Telegram CTA + universal QR scanning
 
 **Penemuan saluran Telegram dijadikan first-class dalam app. QR codes
 sebenarnya sudah boleh discan oleh apa-apa app (kamera iPhone/Android,

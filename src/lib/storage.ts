@@ -1,5 +1,5 @@
-import { Profile, Booking, Resource, Asset } from '../types';
-import { STORAGE_KEYS } from '../constants';
+import { Profile, Booking, Resource, Asset, NotificationSettings, WeekDay } from '../types';
+import { STORAGE_KEYS, DEFAULT_NOTIFICATION_SETTINGS } from '../constants';
 import { supabase, isSupabaseEnabled } from './supabase';
 
 function readJSON<T>(key: string, fallback: T): T {
@@ -505,6 +505,82 @@ export async function updateBookingInCloud(booking: Booking): Promise<{ ok: bool
     cancel_reason: booking.cancelReason ?? null,
   }).eq('id', booking.id);
   if (error) return { ok: false, error: error.message };
+  return { ok: true };
+}
+
+/* =========================================================================
+ * Telegram notification settings (single row, id = 'telegram')
+ * ====================================================================== */
+
+function rowToNotificationSettings(row: any): NotificationSettings {
+  // `active_days` is a Postgres smallint[]; supabase-js hands it back as a
+  // number[]. Guard anyway — a hand-edited row could hold junk, and an
+  // empty array must stay empty (it means "never send").
+  const days = Array.isArray(row.active_days)
+    ? (row.active_days
+        .map((d: any) => Number(d))
+        .filter((d: number) => d >= 1 && d <= 7) as WeekDay[])
+    : DEFAULT_NOTIFICATION_SETTINGS.activeDays;
+  return {
+    enabled: row.enabled ?? true,
+    activeDays: [...days].sort((a, b) => a - b) as WeekDay[],
+    notifyNewBooking: row.notify_new_booking ?? true,
+    notifyReturn: row.notify_return ?? true,
+    notifyCancel: row.notify_cancel ?? true,
+    notifyDailyReminder: row.notify_daily_reminder ?? true,
+    notifyMorningDigest: row.notify_morning_digest ?? true,
+    updatedAt: row.updated_at ? new Date(row.updated_at).getTime() : undefined,
+    updatedBy: row.updated_by ?? undefined,
+  };
+}
+
+/** Read the admin's Telegram notification rules. Returns null when
+ *  Supabase is off or the row can't be read, so the caller can tell
+ *  "not configured" apart from "configured and disabled". */
+export async function fetchNotificationSettings(): Promise<NotificationSettings | null> {
+  if (!isSupabaseEnabled || !supabase) return null;
+  const { data, error } = await supabase
+    .from('notification_settings')
+    .select('*')
+    .eq('id', 'telegram')
+    .maybeSingle();
+  if (error || !data) return null;
+  return rowToNotificationSettings(data);
+}
+
+/** Persist the notification rules. The row is seeded by notify_setup.sql,
+ *  so this is an UPDATE — 0 affected rows means the migration hasn't been
+ *  run on this project yet, which is worth surfacing rather than silently
+ *  "succeeding". */
+export async function updateNotificationSettings(
+  settings: NotificationSettings,
+  updatedBy?: string,
+): Promise<{ ok: boolean; error?: string }> {
+  if (!isSupabaseEnabled || !supabase) {
+    return { ok: false, error: 'Supabase belum dikonfig.' };
+  }
+  const { data, error } = await supabase
+    .from('notification_settings')
+    .update({
+      enabled: settings.enabled,
+      active_days: settings.activeDays,
+      notify_new_booking: settings.notifyNewBooking,
+      notify_return: settings.notifyReturn,
+      notify_cancel: settings.notifyCancel,
+      notify_daily_reminder: settings.notifyDailyReminder,
+      notify_morning_digest: settings.notifyMorningDigest,
+      updated_at: new Date().toISOString(),
+      updated_by: updatedBy ?? null,
+    })
+    .eq('id', 'telegram')
+    .select();
+  if (error) return { ok: false, error: error.message };
+  if (!data || data.length === 0) {
+    return {
+      ok: false,
+      error: 'Baris tetapan tidak dijumpai — jalankan supabase/notify_setup.sql dahulu.',
+    };
+  }
   return { ok: true };
 }
 

@@ -11,11 +11,14 @@ interface Props {
   assets: Asset[];
   profile: Profile | null;
   isAdmin?: boolean;
-  onCancel: (id: string, reason?: string) => void;
+  /** Opens the shared CancelBookingModal in App. Admins may pass any
+   *  booking here, not just their own — the modal enforces the
+   *  reason-required rule for other people's bookings. */
+  onRequestCancel: (booking: Booking) => void;
   onReturn?: (booking: Booking) => void;
 }
 
-export function BookingsView({ bookings, rooms, equipment, assets, profile, isAdmin, onCancel, onReturn }: Props) {
+export function BookingsView({ bookings, rooms, equipment, assets, profile, isAdmin, onRequestCancel, onReturn }: Props) {
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<'all' | 'mine' | 'upcoming'>('all');
 
@@ -288,18 +291,10 @@ export function BookingsView({ bookings, rooms, equipment, assets, profile, isAd
                 )}
                 {b.status === 'confirmed' && profile && (b.userId === profile.id || isAdmin) && (
                   <button
-                    onClick={() => {
-                      const isOwn = b.userId === profile.id;
-                      const promptMsg = isOwn
-                        ? 'Sebab batal (pilihan, boleh kosongkan):'
-                        : `Batalkan tempahan ${b.userName}?\nSebab batal (pilihan):`;
-                      const reason = prompt(promptMsg, '') ?? null;
-                      if (reason === null) return; // user pressed Cancel
-                      onCancel(b.id, reason);
-                    }}
+                    onClick={() => onRequestCancel(b)}
                     className="px-2.5 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-widest text-rose-600 hover:bg-rose-50 transition-colors flex items-center gap-1"
                   >
-                    <Trash2 size={11} /> Batal{!isAdmin || b.userId === profile.id ? '' : ' (Admin)'}
+                    <Trash2 size={11} /> Batal{b.userId === profile.id ? '' : ' (Admin)'}
                   </button>
                 )}
               </div>
@@ -391,17 +386,9 @@ export function BookingsView({ bookings, rooms, equipment, assets, profile, isAd
                     )}
                     {b.status === 'confirmed' && profile && (b.userId === profile.id || isAdmin) && (
                       <button
-                        onClick={() => {
-                          const isOwn = b.userId === profile.id;
-                          const promptMsg = isOwn
-                            ? 'Sebab batal (pilihan, boleh kosongkan):'
-                            : `Batalkan tempahan ${b.userName}?\nSebab batal (pilihan):`;
-                          const reason = prompt(promptMsg, '') ?? null;
-                          if (reason === null) return;
-                          onCancel(b.id, reason);
-                        }}
+                        onClick={() => onRequestCancel(b)}
                         className="p-1.5 rounded-lg text-slate-400 hover:bg-rose-50 hover:text-rose-600 transition-colors"
-                        title={b.userId === profile.id ? 'Batalkan' : 'Batalkan (Admin)'}
+                        title={b.userId === profile.id ? 'Batalkan' : `Batalkan tempahan ${b.userName} (Admin)`}
                       >
                         <Trash2 size={14} />
                       </button>

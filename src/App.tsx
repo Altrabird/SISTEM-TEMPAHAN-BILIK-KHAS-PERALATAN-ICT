@@ -29,6 +29,8 @@ import {
 import { isAssetLocked, isResourceLocked, lockReasonOf } from './lib/locks';
 import { visibleFor } from './lib/visibility';
 import { isSupabaseEnabled } from './lib/supabase';
+import { resolveResourceName } from './lib/resources';
+import { syncClock } from './lib/serverTime';
 
 import { DashboardView } from './views/DashboardView';
 import { BookingsView } from './views/BookingsView';
@@ -54,6 +56,8 @@ import { EditAssetModal } from './components/EditAssetModal';
 import { BulkAssetActionsModal, BulkAction } from './components/BulkAssetActionsModal';
 import { ReturnLoanModal } from './components/ReturnLoanModal';
 import { BulkReturnModal } from './components/BulkReturnModal';
+import { CancelBookingModal } from './components/CancelBookingModal';
+import { LiveClock } from './components/LiveClock';
 import { AddResourceModal } from './components/AddResourceModal';
 import { PWAUpdatePrompt } from './components/PWAUpdatePrompt';
 import { QRScannerModal, parseScannedId } from './components/QRScannerModal';
@@ -92,6 +96,7 @@ export default function App() {
   const [editingAsset, setEditingAsset] = useState<Asset | null>(null);
   const [showBulkAssetActions, setShowBulkAssetActions] = useState(false);
   const [returningLoan, setReturningLoan] = useState<{ booking: Booking; asset: Asset | null } | null>(null);
+  const [cancellingBooking, setCancellingBooking] = useState<Booking | null>(null);
   const [bulkReturnItems, setBulkReturnItems] = useState<{ booking: Booking; asset?: Asset; category?: Resource }[] | null>(null);
   const [showScanner, setShowScanner] = useState(false);
   const [scannedId, setScannedId] = useState<string | null>(null);
@@ -105,6 +110,10 @@ export default function App() {
     setBookings(localStore.getBookings());
     setProfile(localStore.getProfile());
     setProfileLoaded(true);
+
+    // Measure the device-clock offset early so the header clock and the
+    // "hari ini" logic in Tetapan agree with the server from first paint.
+    void syncClock();
 
     // Supabase is the source of truth. Cloud results overwrite local cache
     // (even when empty — we've seeded the canonical data via migrations).
@@ -867,7 +876,11 @@ export default function App() {
             <h2 className="text-sm md:text-xs font-bold md:uppercase tracking-tight md:tracking-widest text-white md:text-slate-400 flex-1 truncate">
               {navItems.find((n) => n.id === activeView)?.label ?? 'TEMPAH'}
             </h2>
+            {/* Mobile: compact HH:MM inside the blue bar */}
+            <LiveClock variant="compact" className="md:hidden shrink-0" />
             <div className="flex items-center gap-3">
+              {/* Desktop: full clock + date, left of the status legend */}
+              <LiveClock className="hidden md:flex" />
               <div className="hidden md:flex items-center gap-4 mr-2">
                 <div className="flex items-center gap-1.5">
                   <div className="w-2 h-2 rounded-full bg-green-500" />
@@ -939,7 +952,7 @@ export default function App() {
                   assets={assets}
                   profile={profile}
                   isAdmin={isAdmin}
-                  onCancel={cancelBooking}
+                  onRequestCancel={setCancellingBooking}
                   onReturn={(booking) => {
                     const asset = assets.find((a) => a.id === booking.resourceId) ?? null;
                     setReturningLoan({ booking, asset });
@@ -1016,6 +1029,7 @@ export default function App() {
                   localBookings={bookings}
                   localAssets={assets}
                   onMarkReturn={(booking, asset) => setReturningLoan({ booking, asset })}
+                  onRequestCancel={setCancellingBooking}
                 />
               )}
               {activeView === 'loans' && !isAdmin && (
@@ -1226,6 +1240,22 @@ export default function App() {
         onConfirm={(b, notes) => {
           markLoanReturned(b, notes);
           setReturningLoan(null);
+        }}
+      />
+
+      <CancelBookingModal
+        open={cancellingBooking !== null}
+        booking={cancellingBooking}
+        resourceName={
+          cancellingBooking
+            ? resolveResourceName(cancellingBooking.resourceId, rooms, equipment, assets)
+            : ''
+        }
+        actor={profile}
+        onClose={() => setCancellingBooking(null)}
+        onConfirm={(id, reason) => {
+          cancelBooking(id, reason);
+          setCancellingBooking(null);
         }}
       />
 

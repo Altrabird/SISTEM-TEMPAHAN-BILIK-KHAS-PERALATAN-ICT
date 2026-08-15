@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { motion } from 'motion/react';
 import {
   PackageCheck, Calendar, Clock, AlertTriangle, Search, RefreshCw,
-  Laptop, Cloud, CloudOff, ArrowRight, Filter, Mail,
+  Laptop, Cloud, CloudOff, ArrowRight, Filter, Mail, Trash2,
 } from 'lucide-react';
 import { Asset, Booking, Resource } from '../types';
 import { fetchBookingsFromCloud, fetchAssetsFromCloud } from '../lib/storage';
@@ -15,6 +15,10 @@ interface Props {
   localBookings: Booking[];
   localAssets: Asset[];
   onMarkReturn: (booking: Booking, asset: Asset | null) => void;
+  /** Admin cancels a loan the teacher never picked up / no longer needs.
+   *  Distinct from "Tanda Pulang": cancelling voids the loan record
+   *  instead of closing it as a completed return. */
+  onRequestCancel: (booking: Booking) => void;
 }
 
 type FilterMode = 'active' | 'overdue' | 'all-loans' | 'returned';
@@ -23,7 +27,9 @@ type FilterMode = 'active' | 'overdue' | 'all-loans' | 'returned';
 const todayISO = todayLocalISO;
 const daysBetween = daysBetweenISO;
 
-export function ActiveLoansView({ rooms, equipment, localBookings, localAssets, onMarkReturn }: Props) {
+export function ActiveLoansView({
+  rooms, equipment, localBookings, localAssets, onMarkReturn, onRequestCancel,
+}: Props) {
   const [bookings, setBookings] = useState<Booking[]>(localBookings);
   const [assets, setAssets] = useState<Asset[]>(localAssets);
   const [loading, setLoading] = useState(true);
@@ -310,13 +316,22 @@ export function ActiveLoansView({ rooms, equipment, localBookings, localAssets, 
                     </td>
                     <td className="px-4 py-3 text-right">
                       {!isReturned && (
-                        <button
-                          onClick={() => onMarkReturn(b, asset ?? null)}
-                          className="bg-emerald-600 text-white px-3 py-1.5 rounded-md text-[10px] font-bold uppercase tracking-widest hover:bg-emerald-700 transition-all flex items-center gap-1 ml-auto"
-                        >
-                          <PackageCheck size={11} /> Tanda Pulang
-                          <ArrowRight size={10} />
-                        </button>
+                        <div className="flex items-center justify-end gap-1.5">
+                          <button
+                            onClick={() => onRequestCancel(b)}
+                            className="border border-slate-200 text-slate-500 px-2.5 py-1.5 rounded-md text-[10px] font-bold uppercase tracking-widest hover:border-rose-300 hover:bg-rose-50 hover:text-rose-600 transition-all flex items-center gap-1"
+                            title={`Batalkan pinjaman ${b.userName} (Admin)`}
+                          >
+                            <Trash2 size={11} /> Batal
+                          </button>
+                          <button
+                            onClick={() => onMarkReturn(b, asset ?? null)}
+                            className="bg-emerald-600 text-white px-3 py-1.5 rounded-md text-[10px] font-bold uppercase tracking-widest hover:bg-emerald-700 transition-all flex items-center gap-1"
+                          >
+                            <PackageCheck size={11} /> Tanda Pulang
+                            <ArrowRight size={10} />
+                          </button>
+                        </div>
                       )}
                       {isReturned && b.returnedByName && (
                         <p className="text-[10px] text-slate-400">oleh {b.returnedByName}</p>
